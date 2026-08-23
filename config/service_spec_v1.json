@@ -1,0 +1,33 @@
+{
+  "schema": "synergy.service-spec/v1",
+  "service_id": "synergy-autopilot-v5-ai-node",
+  "entrypoints": {
+    "cli": [
+      "python",
+      "synergy_node_cli.py",
+      "status"
+    ],
+    "gui": [
+      "python",
+      "run_integrated_v5.py"
+    ]
+  },
+  "nexus_artifact_sha256": "e87d00809ff976c76655b892166ec1cf1f13a893927ead156295b6814fcd9325",
+  "nexus_protocol": "nexus.artifact-wire/v1",
+  "knowledge_mode": "DETERMINISTIC_BM25_STYLE_RETRIEVAL_AND_MULTINOMIAL_ROUTER",
+  "evidence_mode": "HASH_CHAINED_LOCAL_JOURNAL",
+  "smm_external_side_effects": "POLICY_GATED_DISABLED_BY_DEFAULT",
+  "blockchain_mode": "COMMITMENT_CANDIDATE_ONLY_NO_SIGNING_NO_SUBMISSION",
+  "health_checks": [
+    "EXACT_NEXUS_SHA_SIZE",
+    "NEXUS_STATUS_READY",
+    "KNOWLEDGE_LOADED",
+    "ROUTER_MODEL_BOUND",
+    "AUTHORITY_NONE"
+  ],
+  "financial_authority": "NONE",
+  "payment_authority": "NONE",
+  "accounting_authority": "NONE",
+  "execution_authority": "NONE",
+  "service_spec_digest": "c85956d2b23fcf6c0c9c52fe759485c621ad790ac6b125c8eb5447adc76cffe2"
+}
