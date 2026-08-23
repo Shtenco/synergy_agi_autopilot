@@ -1,0 +1,16 @@
+{
+  "schema": "synergy.autopilot-nexus-binding/v1",
+  "repository": "Shtenco/agi_nexus",
+  "source_branch": "feat/repro-artifact-v3-20260822",
+  "source_head_observed": "f966a0eca6d8bd753aba5db4c09a70edd7454d88",
+  "artifact_sha256": "e87d00809ff976c76655b892166ec1cf1f13a893927ead156295b6814fcd9325",
+  "artifact_size": 56965,
+  "runtime_spec_digest": "e7e9bfd5684e8a1c3b0964288945d750d8cc109869a5dae54fc3ad64de5e8998",
+  "location_evidence_v2_digest": "341989039238b9735018bad71c2ac1f0114ae15b4736faa524b5f7a643c27f47",
+  "operations": ["STATUS", "FORMAL_REASON", "SMALLWORLD_EXACT_DIGESTS", "CYBER_STEP"],
+  "network_access": "NONE",
+  "process_execution_authority": "NONE",
+  "financial_authority": "NONE",
+  "execution_authority": "NONE",
+  "integration_mode": "EXACT_ARTIFACT_REQUIRED_FAIL_CLOSED"
+}

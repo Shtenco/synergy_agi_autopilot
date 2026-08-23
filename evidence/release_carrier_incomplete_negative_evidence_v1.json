@@ -1,0 +1,13 @@
+{
+  "schema": "synergy.negative-evidence/v1",
+  "evidence_id": "AUTOPILOT_V5_RELEASE_CARRIER_V1_INCOMPLETE_20260823",
+  "repository": "Shtenco/agi_autopilot",
+  "affected_artifact": "artifacts/release_carrier/carrier_manifest_v1.json",
+  "carrier_manifest_digest": "674ab8e32d508eaed2ed3397dab4972dd20d5367ec7225f865aee35ebf0a7e02",
+  "observed_status": "INCOMPLETE_PART_SET_NOT_CANONICAL_ARTIFACT_LOCATION",
+  "reason": "Manifest declares 8 base64 parts but the published branch checkpoint does not provide a complete verified part set. A new durable Drive release locator supersedes this carrier for artifact resolution.",
+  "superseded_by_location_evidence_digest": "4b07c66aa9b682c6a540c357e861b7fe26104efe644195c535d24e6549d34306",
+  "effect": "DO_NOT_USE_RELEASE_CARRIER_V1_FOR_ARTIFACT_RESOLUTION",
+  "execution_authority": "NONE",
+  "negative_evidence_digest": "0aad754bb2d7785def84c7a2e1d50742cc571797a3f6c6426491dc604a82b1e7"
+}

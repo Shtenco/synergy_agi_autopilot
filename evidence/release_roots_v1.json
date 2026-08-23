@@ -1,0 +1,9 @@
+{
+  "schema": "synergy.autopilot-v5-ai-node-release-roots/v1",
+  "integration_manifest_digest": "a793250aaa2299fdaf1661e985423c2b62687a19395ceabcc7bb63c005defe54",
+  "commitment_candidate_digest": "1d33a7c7da14cdb7543d4723a69e1b1842d215a43ba97fda4c25ff12cdb2d666",
+  "local_verification_digest": "d43d44a4f71b5052996366663ad3c20f7fd702885213fa08dbb1c06c3de2e7e1",
+  "nexus_artifact_sha256": "e87d00809ff976c76655b892166ec1cf1f13a893927ead156295b6814fcd9325",
+  "execution_authority": "NONE",
+  "release_roots_digest": "224e6c43bfccb3b0db7acf92f243dace0ee5228a7ab31a0be140328e692f3630"
+}

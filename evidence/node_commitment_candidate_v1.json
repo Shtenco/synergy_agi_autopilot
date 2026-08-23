@@ -1,0 +1,14 @@
+{
+  "schema": "synergy.ai-blockchain-node-commitment/v1",
+  "node_id": "synergy-autopilot-v5-ai-node",
+  "evidence_root": "d43d44a4f71b5052996366663ad3c20f7fd702885213fa08dbb1c06c3de2e7e1",
+  "knowledge_digest": "7b6d3f9bd07247c97cfec7ba532341c126c111d5e8c4a973e28810107736c899",
+  "router_model_digest": "66363afa3a63155774435aeb6649022ba166684274739709d229bcde6f64a5ea",
+  "payload_digest": "3b96f1715c1244a3fa7ca406c6c5ceb06a01560fe9bbbdd0f0d046c4dba66975",
+  "execution_authority": "NONE",
+  "financial_authority": "NONE",
+  "commitment_digest": "1d33a7c7da14cdb7543d4723a69e1b1842d215a43ba97fda4c25ff12cdb2d666",
+  "submission_status": "NOT_SUBMITTED_CANDIDATE_ONLY",
+  "signing_authority": "NONE",
+  "blockchain_submission_authority": "NONE"
+}
