@@ -1,0 +1,20 @@
+name: AUTOPILOT V5 AI Node LAB Deployment Reference v1
+on:
+  pull_request:
+    paths:
+      - 'evidence/deployment_reference_v1.json'
+      - 'scripts/verify_deployment_reference_v1.py'
+      - 'tests/test_deployment_reference_v1.py'
+      - 'docs/LAB_DEPLOYMENT_REFERENCE_V1_20260823.md'
+      - '.github/workflows/lab-deployment-reference-v1.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/verify_deployment_reference_v1.py
+      - run: python -m unittest tests/test_deployment_reference_v1.py -v
