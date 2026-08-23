@@ -1,0 +1,18 @@
+{
+  "schema": "synergy.node-profile/v1",
+  "node_id": "synergy-autopilot-v5-ai-node",
+  "node_class": "AI_BLOCKCHAIN_CAPABILITY_NODE",
+  "base_system": "AUTOPILOT_V5",
+  "components": ["AUTOPILOT_V5_CONTROL_SURFACE","NEXUS_E87D_PROOF_KERNEL","TRAINED_SYSTEM_KNOWLEDGE_ROUTER","SMM_AI_CAPABILITY_NODE","HASH_CHAINED_EVIDENCE_JOURNAL","AI_BLOCKCHAIN_COMMITMENT_CANDIDATE_ADAPTER"],
+  "capability_domains": ["orchestration","knowledge","nexus_reasoning","smm_generation","smm_analysis","financial_handoff","metapay_handoff","network_inspection","host_handoff","blockchain_commitment_candidate"],
+  "external_side_effects": "DISABLED_BY_DEFAULT",
+  "bulk_unsolicited_outreach": "NOT_SUPPORTED_ACTIVE_NODE",
+  "auto_start": false,
+  "financial_authority": "NONE",
+  "payment_authority": "NONE",
+  "accounting_authority": "NONE",
+  "host_execution_authority": "NONE",
+  "blockchain_submission_authority": "NONE",
+  "execution_authority": "NONE",
+  "profile_digest": "af8b1285f41fb8cb82d99fb4611dcb3814dda667977c50bce77d31d500a22763"
+}
