@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+EXPECTED = {
+    "schema": "synergy.autopilot-v5-ai-node-deployment-reference/v1",
+    "node_id": "synergy-autopilot-v5-ai-node",
+    "integration_manifest_digest": "a793250aaa2299fdaf1661e985423c2b62687a19395ceabcc7bb63c005defe54",
+    "release_roots_digest": "224e6c43bfccb3b0db7acf92f243dace0ee5228a7ab31a0be140328e692f3630",
+    "synergynet_transport_binding_digest": "3c8198e10863c52c0492ca422c404a1e05e6fd2f48f4c393587d9d87eee3855f",
+    "meta_os_profile_v2_digest": "6a84a2dd132823756c9f159b04584ac384dca9514316b3ff5c9f4ce06e1696d3",
+    "meta_os_admission_v2_digest": "4d3502dba28745b8a734c082ca0260cbbfd4ead11a1396537434844df9987ee3",
+    "lab_host_profile_digest": "36a9092977e360b56fd7d1e21b4504f1215ed741df6f492b3ed37b79649573bb",
+    "lab_supervisor_config_digest": "74797e02e0bb32722bbfffb76af42bb00d495fb3a5c0ea4a5b48a4e1d4275879",
+    "lab_deployment_evidence_digest": "8e1b05dca7e349d57e1908dca717d2c1d451ca79adde5cfe539e9e46f83d052b",
+    "lab_deployment_result_digest": "011c3ce24cfd33dc99fbdea0ea2f5dcd344deefd927f57c1b9c1fa3e3eaa3833",
+    "system_registry_v2_digest": "12bdca330d81b81ec0acb32cf974f12fb36c5e72e6a1fea8680dc5e8470b275d",
+    "ai_blockchain_deployment_commitment_v2_digest": "1b47ae40ae48848be1648da5cc1c443232a47dc59969e70a6dd033672e5397c0",
+    "production_transition_gate_digest": "fd3f97c1422376ae507e7ec0ab1dcff529cba4ad9b5f6b1e9b7b62ef43d75b8c",
+    "lab_state": "RUNNING_VERIFIED_THEN_STOPPED_GRACEFULLY",
+    "current_running": False,
+    "production_status": "BLOCKED_NOT_DEPLOYED",
+    "financial_authority": "NONE",
+    "payment_authority": "NONE",
+    "accounting_authority": "NONE",
+    "blockchain_submission_authority": "NONE",
+    "execution_authority": "NONE",
+}
+EXPECTED_DIGEST = "19375c02a286a4c14e704ad0496d1c6084ddb00e7c4bcf3506a304a6b0946b70"
+
+
+class DeploymentReferenceError(ValueError):
+    pass
+
+
+def canonical_bytes(value: Any) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+
+
+def verify_reference(value: dict[str, Any]) -> str:
+    if not isinstance(value, dict):
+        raise DeploymentReferenceError("reference must be object")
+    expected_fields = set(EXPECTED) | {"deployment_reference_digest"}
+    if set(value) != expected_fields:
+        raise DeploymentReferenceError("unexpected field set")
+    payload = dict(value)
+    claimed = payload.pop("deployment_reference_digest")
+    if payload != EXPECTED:
+        raise DeploymentReferenceError("cross-domain identity/state/authority mismatch")
+    actual = hashlib.sha256(canonical_bytes(payload)).hexdigest()
+    if actual != EXPECTED_DIGEST or claimed != actual:
+        raise DeploymentReferenceError("deployment reference digest mismatch")
+    return actual
+
+
+def main() -> int:
+    root = Path(__file__).resolve().parents[1]
+    path = root / "evidence" / "deployment_reference_v1.json"
+    digest = verify_reference(json.loads(path.read_text(encoding="utf-8")))
+    print(json.dumps({"status": "PASS", "deployment_reference_digest": digest}, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
