@@ -1,0 +1,21 @@
+{
+  "schema": "synergy.autopilot-v5-ai-node-release-carrier/v1",
+  "archive_name": "SYNERGY_AUTOPILOT_V5_NEXUS_NODE_V1.zip",
+  "archive_sha256": "afba4eb7508564292f6695dbef69e9a043a998da8a2e4b587922c17bbefb37cb",
+  "archive_size": 1045560,
+  "part_count": 8,
+  "parts": [
+    {"path":"artifacts/release_carrier/000.b64part","decoded_size":131072,"decoded_sha256":"480141c13116b26ce83fde578c3c8213fcc362c3ab0c04025d3b612ba6bb8035","base64_chars":174764},
+    {"path":"artifacts/release_carrier/001.b64part","decoded_size":131072,"decoded_sha256":"0f9cf49cb148782b1cb006b605bed516e3f64077c008175ecff7f857707251d0","base64_chars":174764},
+    {"path":"artifacts/release_carrier/002.b64part","decoded_size":131072,"decoded_sha256":"f55d8cde54cc01295d4f47ff8d7676a3e4506f655e87aaf42d8c4da6ee256181","base64_chars":174764},
+    {"path":"artifacts/release_carrier/003.b64part","decoded_size":131072,"decoded_sha256":"e19e353f24788c23ca4e77bcbfc5084f976cfe3e55916f75e062ef11d2c4c01c","base64_chars":174764},
+    {"path":"artifacts/release_carrier/004.b64part","decoded_size":131072,"decoded_sha256":"b5552087738002e733e314561356140559856b98b5f0700273e8b4d93864b532","base64_chars":174764},
+    {"path":"artifacts/release_carrier/005.b64part","decoded_size":131072,"decoded_sha256":"080c38cd6f2ba01e6bc7ccf9006f8767fb0e87205a037ed58e0d2853855c40f0","base64_chars":174764},
+    {"path":"artifacts/release_carrier/006.b64part","decoded_size":131072,"decoded_sha256":"550350d91ded20a78de2ead1ab9a6e84f5ed22838648a749bbef73c2b480e820","base64_chars":174764},
+    {"path":"artifacts/release_carrier/007.b64part","decoded_size":128056,"decoded_sha256":"757b1755712566c7af0aa2d8b2e4e8f2dc379b07de06d87c01d7534a7441c244","base64_chars":170744}
+  ],
+  "encoding": "BASE64_OF_CONTIGUOUS_RAW_ZIP_PARTS",
+  "reconstruction": "base64-decode each part in lexical order and concatenate raw decoded bytes",
+  "integration_manifest_digest": "a793250aaa2299fdaf1661e985423c2b62687a19395ceabcc7bb63c005defe54",
+  "carrier_manifest_digest": "674ab8e32d508eaed2ed3397dab4972dd20d5367ec7225f865aee35ebf0a7e02"
+}
