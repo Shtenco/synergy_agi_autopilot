@@ -1,0 +1,29 @@
+{
+  "schema": "synergy.artifact-location-evidence/v1",
+  "location_id": "SYNERGY_AUTOPILOT_V5_AI_NODE_RELEASE_V1_DRIVE_20260823",
+  "repository": "Shtenco/agi_autopilot",
+  "node_id": "synergy-autopilot-v5-ai-node",
+  "artifact_kind": "ZIP_RELEASE_BUNDLE",
+  "file_name": "SYNERGY_AUTOPILOT_V5_NEXUS_NODE_V1.zip",
+  "archive_sha256": "afba4eb7508564292f6695dbef69e9a043a998da8a2e4b587922c17bbefb37cb",
+  "archive_size": 1045560,
+  "integration_manifest_digest": "a793250aaa2299fdaf1661e985423c2b62687a19395ceabcc7bb63c005defe54",
+  "release_roots_digest": "224e6c43bfccb3b0db7acf92f243dace0ee5228a7ab31a0be140328e692f3630",
+  "local_verification_digest": "d43d44a4f71b5052996366663ad3c20f7fd702885213fa08dbb1c06c3de2e7e1",
+  "nexus_artifact_sha256": "e87d00809ff976c76655b892166ec1cf1f13a893927ead156295b6814fcd9325",
+  "provider": "GOOGLE_DRIVE_CONNECTED_FILE",
+  "provider_file_id": "1T_hFhR24pvEsBXcAzsJ92bHyipPLJgbt",
+  "availability_status": "DURABLE_CONNECTED_DRIVE_BINARY",
+  "resolution_contract": "FETCH_BY_PROVIDER_FILE_ID_THEN_VERIFY_SHA256_AND_SIZE_BEFORE_USE",
+  "pre_upload_validation": {
+    "status": "PASS",
+    "sha256": "afba4eb7508564292f6695dbef69e9a043a998da8a2e4b587922c17bbefb37cb",
+    "size": 1045560
+  },
+  "execution_authority": "NONE",
+  "financial_authority": "NONE",
+  "payment_authority": "NONE",
+  "accounting_authority": "NONE",
+  "blockchain_submission_authority": "NONE",
+  "location_evidence_digest": "4b07c66aa9b682c6a540c357e861b7fe26104efe644195c535d24e6549d34306"
+}
