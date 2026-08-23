@@ -1,0 +1,57 @@
+{
+  "schema": "synergy.autopilot-v5-ai-node-local-verification/v1",
+  "status": "PASS",
+  "claim_tier": "LOCAL_EXECUTED_EVIDENCE_NOT_EXTERNAL_BENCHMARK_NOT_PRODUCTION",
+  "checks": {
+    "unit_integration_tests": true,
+    "router_regression_16_of_16": true,
+    "nexus_exact_sha_size": true,
+    "nexus_status_ready": true,
+    "safe_config_dry_run": true,
+    "legacy_direct_api_not_in_node_chat": true,
+    "bulk_inviter_not_active": true,
+    "authority_boundary": true
+  },
+  "tests": {
+    "returncode": 0,
+    "count_expected": 14,
+    "log_sha256": "cd5455b30e41dc5a4d974e8ba11010b1faca1db30d609c0a1849385de9e8c22b"
+  },
+  "router_regression": {
+    "digest": "56054577ef7a86ab947102ae940f3ab33eece502b82650ec77f2d647a56c291a",
+    "passed": 16,
+    "total": 16,
+    "accuracy": 1.0
+  },
+  "training": {
+    "manifest_digest": "fe6231a2e1561c3149e09d868d96c043d3f5be431f4dd0e83f9bea7661390e95",
+    "router_model_digest": "66363afa3a63155774435aeb6649022ba166684274739709d229bcde6f64a5ea",
+    "knowledge_graph_digest": "4d7e7592aa4458b07bea588cd760a14e5761e010c888d8bde05a70bcf08af8c6",
+    "file_count": 91,
+    "chunk_count": 520
+  },
+  "source_manifest_digest": "e41787bed05d97ac00414927dc292d01d62fe9a030af16ff07c81d378c5239fc",
+  "nexus": {
+    "artifact_sha256": "e87d00809ff976c76655b892166ec1cf1f13a893927ead156295b6814fcd9325",
+    "artifact_size": 56965,
+    "runtime_spec_digest": "e7e9bfd5684e8a1c3b0964288945d750d8cc109869a5dae54fc3ad64de5e8998",
+    "status_payload": {
+      "authority_order": ["FORMAL_VERIFIED", "CYBER_FEEDBACK", "NONE"],
+      "components": ["R710_FROZEN_FORMAL_PROOF", "EXACT_SMALLWORLD", "BOUNDED_CYBER_STATE"],
+      "execution_authority": "NONE",
+      "r710_source": "EXACT_FROZEN_UPSTREAM",
+      "schema": "nexus.artifact-core-status/v1",
+      "status": "READY"
+    }
+  },
+  "environment": {
+    "python": "3.13.5",
+    "platform": "Linux-6.18.35-x86_64-with-glibc2.41"
+  },
+  "ci_status": "NOT_CLAIMED_LOCAL_EXECUTION_ONLY",
+  "financial_authority": "NONE",
+  "payment_authority": "NONE",
+  "accounting_authority": "NONE",
+  "execution_authority": "NONE",
+  "verification_digest": "d43d44a4f71b5052996366663ad3c20f7fd702885213fa08dbb1c06c3de2e7e1"
+}
