@@ -1,0 +1,20 @@
+name: AUTOPILOT V5 AI Node Pre-Production DeploymentReference v2
+on:
+  pull_request:
+    paths:
+      - 'evidence/deployment_reference_v2.json'
+      - 'scripts/verify_deployment_reference_v2.py'
+      - 'tests/test_deployment_reference_v2.py'
+      - 'docs/PREPRODUCTION_DEPLOYMENT_REFERENCE_V2_20260824.md'
+      - '.github/workflows/preproduction-deployment-reference-v2.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/verify_deployment_reference_v2.py
+      - run: python -m unittest tests/test_deployment_reference_v2.py -v
