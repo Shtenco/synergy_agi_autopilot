@@ -26,7 +26,8 @@ class AutopilotPolicyDecision:
             raise AutopilotContractError("ALLOW cannot retain unresolved approvals")
         if self.decision == "REQUIRE_APPROVAL" and not self.required_approvals:
             raise AutopilotContractError("REQUIRE_APPROVAL needs at least one authority")
-        if any(cap in {"accounting-authority", "payment-signing-authority", "blockchain-admin-authority"} for cap in self.capabilities):
+        forbidden = {"accounting-authority", "payment-signing-authority", "blockchain-admin-authority"}
+        if any(cap in forbidden for cap in self.capabilities):
             raise AutopilotContractError("AUTOPILOT cannot mint domain authority through capabilities")
 
     def as_payload(self) -> dict:

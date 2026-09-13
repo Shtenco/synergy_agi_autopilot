@@ -1,3 +1,2 @@
-from .contracts import AutopilotPolicyDecision, AutopilotContractError
-
-__all__ = ["AutopilotPolicyDecision", "AutopilotContractError"]
+"""SYNERGY AUTOPILOT: policy-gated business capability runtime."""
+__version__ = "1.0.0a1"
