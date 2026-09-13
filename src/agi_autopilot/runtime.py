@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json, os
-from .agents import CEOAgent,CFOAgent,SMMAgent,SalesAgent,VideoAgent,RevenueAgent
+from .agents import CEOAgent,CFOAgent,SMMAgent,SalesAgent,VideoAgent,RevenueAgent,CoderAgent,VerifierAgent
 from .capabilities import CapabilityRegistry,CapabilitySpec,Effect
 from .integrations import BusinessIntegrations, GenericVideoProvider
 from .model_router import TextModelRouter
@@ -11,11 +11,13 @@ from .task_store import TaskStore
 class AutopilotRuntime:
     def __init__(self,db_path:str|None=None):
         self.store=TaskStore(db_path or os.getenv("AUTOPILOT_DB_PATH","var/autopilot_runtime.db")); self.policy=PolicyEngine(); self.registry=CapabilityRegistry()
-        self.ceo=CEOAgent(); self.revenue=RevenueAgent(); self.cfo=CFOAgent(); self.smm=SMMAgent(); self.sales=SalesAgent(); self.video=VideoAgent(); self.biz=BusinessIntegrations(); self.video_provider=GenericVideoProvider(); self.models=TextModelRouter()
+        self.ceo=CEOAgent(); self.revenue=RevenueAgent(); self.coder=CoderAgent(); self.verifier=VerifierAgent(); self.cfo=CFOAgent(); self.smm=SMMAgent(); self.sales=SalesAgent(); self.video=VideoAgent(); self.biz=BusinessIntegrations(); self.video_provider=GenericVideoProvider(); self.models=TextModelRouter()
         self._register()
     def _r(self,name,agent,effect,desc,handler,approval=False,lineage="AUTOPILOT2/V5"):
         self.registry.register(CapabilitySpec(name,agent,effect,desc,approval,True,lineage),handler)
     def _register(self):
+        self._r("coder.change_plan","AI_CODER",Effect.LOCAL_COMPUTE,"Prepare a bounded code-change plan without shell execution",self.coder.change_plan,False,"AUTOPILOT2/V5 Coder")
+        self._r("verifier.check_evidence","AI_VERIFIER",Effect.LOCAL_COMPUTE,"Verify required evidence fields without granting domain authority",self.verifier.check_evidence,False,"AUTOPILOT2/V5 Verifier")
         self._r("research.validate_revenue_opportunity","AI_REVENUE",Effect.LOCAL_COMPUTE,"Evidence-first validation of a revenue opportunity",self.revenue.validate,False,"Auto-Company 2.0 revenue-loop + AUTOPILOT")
         self._r("ceo.plan","AI_CEO",Effect.LOCAL_COMPUTE,"Decompose a business goal into bounded capabilities",self.ceo.plan,False,"AUTOPILOT2/V5 planner + Federation V3")
         self._r("cfo.analyze_budget","AI_CFO",Effect.LOCAL_COMPUTE,"Budget, margin, variance and ROAS analysis",self.cfo.analyze_budget)

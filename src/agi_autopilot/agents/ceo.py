@@ -8,5 +8,6 @@ class CEOAgent:
         if any(x in goal for x in ["cfo","финанс","бюджет","roi"]): caps += ["cfo.analyze_budget"]
         if any(x in goal for x in ["video","видео","reels","shorts"]): caps += ["video.storyboard"]
         if any(x in goal for x in ["реклам","ads"]): caps += ["ads.yandex.campaigns"]
+        if any(x in goal for x in ["код","code","разработ"]): caps += ["coder.change_plan","verifier.check_evidence"]
         if not caps: caps=["integration.status"]
         return {"schema":"synergy.autopilot-plan/v1","goal":p.get("goal",""),"capabilities":list(dict.fromkeys(caps)),"execution_authority":"NONE"}
