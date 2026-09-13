@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json, os
-from .agents import CEOAgent,CFOAgent,SMMAgent,SalesAgent,VideoAgent
+from .agents import CEOAgent,CFOAgent,SMMAgent,SalesAgent,VideoAgent,RevenueAgent
 from .capabilities import CapabilityRegistry,CapabilitySpec,Effect
 from .integrations import BusinessIntegrations, GenericVideoProvider
 from .model_router import TextModelRouter
@@ -11,11 +11,12 @@ from .task_store import TaskStore
 class AutopilotRuntime:
     def __init__(self,db_path:str|None=None):
         self.store=TaskStore(db_path or os.getenv("AUTOPILOT_DB_PATH","var/autopilot_runtime.db")); self.policy=PolicyEngine(); self.registry=CapabilityRegistry()
-        self.ceo=CEOAgent(); self.cfo=CFOAgent(); self.smm=SMMAgent(); self.sales=SalesAgent(); self.video=VideoAgent(); self.biz=BusinessIntegrations(); self.video_provider=GenericVideoProvider(); self.models=TextModelRouter()
+        self.ceo=CEOAgent(); self.revenue=RevenueAgent(); self.cfo=CFOAgent(); self.smm=SMMAgent(); self.sales=SalesAgent(); self.video=VideoAgent(); self.biz=BusinessIntegrations(); self.video_provider=GenericVideoProvider(); self.models=TextModelRouter()
         self._register()
     def _r(self,name,agent,effect,desc,handler,approval=False,lineage="AUTOPILOT2/V5"):
         self.registry.register(CapabilitySpec(name,agent,effect,desc,approval,True,lineage),handler)
     def _register(self):
+        self._r("research.validate_revenue_opportunity","AI_REVENUE",Effect.LOCAL_COMPUTE,"Evidence-first validation of a revenue opportunity",self.revenue.validate,False,"Auto-Company 2.0 revenue-loop + AUTOPILOT")
         self._r("ceo.plan","AI_CEO",Effect.LOCAL_COMPUTE,"Decompose a business goal into bounded capabilities",self.ceo.plan,False,"AUTOPILOT2/V5 planner + Federation V3")
         self._r("cfo.analyze_budget","AI_CFO",Effect.LOCAL_COMPUTE,"Budget, margin, variance and ROAS analysis",self.cfo.analyze_budget)
         self._r("cfo.unit_economics","AI_CFO",Effect.LOCAL_COMPUTE,"CAC/LTV/payback/contribution analysis",self.cfo.unit_economics)
