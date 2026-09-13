@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="${1:-vendor/shttps}"
-COMMIT="2d6cab8af334c083d7d7fe31f6d298777bde200a"
+COMMIT="e8bb87fae6d98417782d51a583d4b9bee7896680"
 if [ ! -d "$ROOT/.git" ]; then git clone https://github.com/Shtenco/shttps.git "$ROOT"; fi
 git -C "$ROOT" fetch origin "$COMMIT"
 git -C "$ROOT" checkout --detach "$COMMIT"
