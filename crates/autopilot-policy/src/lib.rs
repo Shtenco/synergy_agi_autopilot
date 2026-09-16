@@ -15,6 +15,10 @@ impl PolicyRule {
         Self { capability: Some(capability), min_risk: None, decision }
     }
 
+    pub fn for_capability_at_least_risk(capability: Capability, min_risk: RiskClass, decision: PolicyDecision) -> Self {
+        Self { capability: Some(capability), min_risk: Some(min_risk), decision }
+    }
+
     pub fn at_least_risk(min_risk: RiskClass, decision: PolicyDecision) -> Self {
         Self { capability: None, min_risk: Some(min_risk), decision }
     }
@@ -32,8 +36,19 @@ impl PolicyRule {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct PolicyEngine { rules: Vec<PolicyRule> }
+
+impl Default for PolicyEngine {
+    fn default() -> Self {
+        Self::new(vec![
+            PolicyRule::for_capability(Capability::ForcePush, PolicyDecision::Deny),
+            PolicyRule::for_capability(Capability::ReleasePublish, PolicyDecision::Deny),
+            PolicyRule::for_capability_at_least_risk(Capability::AccessSecrets, RiskClass::High, PolicyDecision::RequireApproval),
+            PolicyRule::for_capability_at_least_risk(Capability::DeleteFiles, RiskClass::High, PolicyDecision::RequireApproval),
+        ])
+    }
+}
 
 impl PolicyEngine {
     pub fn new(rules: Vec<PolicyRule>) -> Self { Self { rules } }
