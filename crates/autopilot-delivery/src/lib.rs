@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use autopilot_runtime::{CommandSpec, RuntimeAdapter, RuntimeError};
+use autopilot_runtime::{CommandResult, CommandSpec, RuntimeAdapter, RuntimeError};
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -15,17 +15,10 @@ pub struct DeliveryConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PullRequestRef {
-    pub url: String,
-}
+pub struct PullRequestRef { pub url: String }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CiState {
-    Passing,
-    Failing,
-    Pending,
-    Unknown,
-}
+pub enum CiState { Passing, Failing, Pending, Unknown }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CiCheck {
@@ -36,10 +29,7 @@ pub struct CiCheck {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CiReport {
-    pub state: CiState,
-    pub checks: Vec<CiCheck>,
-}
+pub struct CiReport { pub state: CiState, pub checks: Vec<CiCheck> }
 
 #[derive(Debug, Error)]
 pub enum DeliveryError {
@@ -53,14 +43,10 @@ pub enum DeliveryError {
 
 #[derive(Deserialize)]
 struct GhCheck {
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    state: String,
-    #[serde(default)]
-    bucket: String,
-    #[serde(default)]
-    link: String,
+    #[serde(default)] name: String,
+    #[serde(default)] state: String,
+    #[serde(default)] bucket: String,
+    #[serde(default)] link: String,
 }
 
 pub struct DeliveryEngine {
@@ -74,18 +60,14 @@ impl DeliveryEngine {
         Ok(Self { runtime, config })
     }
 
+    async fn execute(&self, program: &str, args: Vec<String>) -> Result<CommandResult, DeliveryError> {
+        Ok(self.runtime.execute(CommandSpec::new(program).args(args).cwd(self.config.workdir.clone())).await?)
+    }
+
     async fn run(&self, program: &str, args: Vec<String>) -> Result<String, DeliveryError> {
-        let result = self.runtime.execute(
-            CommandSpec::new(program)
-                .args(args)
-                .cwd(self.config.workdir.clone())
-        ).await?;
+        let result = self.execute(program, args).await?;
         if result.exit_code != 0 {
-            return Err(DeliveryError::CommandFailed {
-                program: program.into(),
-                code: result.exit_code,
-                stderr: result.stderr,
-            });
+            return Err(DeliveryError::CommandFailed { program: program.into(), code: result.exit_code, stderr: result.stderr });
         }
         Ok(result.stdout)
     }
@@ -97,15 +79,18 @@ impl DeliveryEngine {
     }
 
     pub async fn push_branch(&self) -> Result<(), DeliveryError> {
-        self.run("git", vec![
-            "push".into(),
-            self.config.remote.clone(),
-            self.config.branch.clone(),
-        ]).await?;
+        self.run("git", vec!["push".into(), self.config.remote.clone(), self.config.branch.clone()]).await?;
         Ok(())
     }
 
     pub async fn ensure_pr(&self) -> Result<PullRequestRef, DeliveryError> {
+        let existing = self.execute("gh", vec![
+            "pr".into(), "view".into(), self.config.branch.clone(),
+            "--json".into(), "url".into(), "--jq".into(), ".url".into(),
+        ]).await?;
+        if existing.exit_code == 0 && !existing.stdout.trim().is_empty() {
+            return Ok(PullRequestRef { url: existing.stdout.trim().to_string() });
+        }
         let stdout = self.run("gh", vec![
             "pr".into(), "create".into(),
             "--base".into(), self.config.base.clone(),
@@ -123,11 +108,11 @@ impl DeliveryEngine {
     }
 
     pub async fn read_ci(&self) -> Result<CiReport, DeliveryError> {
-        let stdout = self.run("gh", vec![
+        let result = self.execute("gh", vec![
             "pr".into(), "checks".into(),
             "--json".into(), "name,state,bucket,link".into(),
         ]).await?;
-        let parsed: Result<Vec<GhCheck>, _> = serde_json::from_str(&stdout);
+        let parsed: Result<Vec<GhCheck>, _> = serde_json::from_str(&result.stdout);
         let Ok(parsed) = parsed else {
             return Ok(CiReport { state: CiState::Unknown, checks: Vec::new() });
         };
@@ -153,16 +138,12 @@ fn validate_branch(branch: &str) -> Result<(), DeliveryError> {
         || branch.contains('\\')
         || branch.ends_with('/')
         || branch.starts_with('/');
-    if bad {
-        return Err(DeliveryError::UnsafeBranch(branch.into()));
-    }
+    if bad { return Err(DeliveryError::UnsafeBranch(branch.into())); }
     Ok(())
 }
 
 fn classify_ci(checks: &[CiCheck]) -> CiState {
-    if checks.is_empty() {
-        return CiState::Unknown;
-    }
+    if checks.is_empty() { return CiState::Unknown; }
     let mut pending = false;
     for check in checks {
         let bucket = check.bucket.to_ascii_lowercase();
