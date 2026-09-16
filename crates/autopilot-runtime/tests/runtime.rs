@@ -10,7 +10,7 @@ async fn fake_runtime_returns_configured_result() {
 
 #[tokio::test]
 async fn native_runtime_executes_without_shell_concatenation() {
-    let runtime = NativeRuntime::default();
+    let runtime = NativeRuntime;
     let spec = if cfg!(windows) {
         CommandSpec::new("cmd").args(["/C", "echo", "OPEN_AUTOPILOT"])
     } else {
