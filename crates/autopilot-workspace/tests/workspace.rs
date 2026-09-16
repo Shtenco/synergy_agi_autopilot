@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use autopilot_runtime::{CommandResult, CommandSpec, RuntimeAdapter, RuntimeError};
-use autopilot_workspace::{normalize_branch_fragment, WorkspaceManager};
+use autopilot_workspace::{normalize_branch_fragment, WorkspaceError, WorkspaceManager};
 
 #[derive(Default)]
 struct RecordingRuntime {
@@ -49,4 +49,22 @@ async fn creates_worktree_with_sanitized_branch_and_explicit_base() {
     let commands = runtime.commands.lock().unwrap();
     assert_eq!(commands[0].args[0..5], ["-C", "C:/repo", "worktree", "add", "-b"]);
     assert_eq!(commands[0].args[5], "autopilot/fix-crash");
+}
+
+#[tokio::test]
+async fn rejects_removal_outside_managed_worktree_root() {
+    let runtime = Arc::new(RecordingRuntime::default());
+    let manager = WorkspaceManager::new(PathBuf::from("C:/repo"), PathBuf::from("C:/worktrees"), runtime.clone());
+    let error = manager.remove_worktree(PathBuf::from("C:/important-project")).await.unwrap_err();
+    assert!(matches!(error, WorkspaceError::PathOutsideManagedRoot { .. }));
+    assert!(runtime.commands.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn allows_removal_inside_managed_worktree_root() {
+    let runtime = Arc::new(RecordingRuntime::default());
+    let manager = WorkspaceManager::new(PathBuf::from("C:/repo"), PathBuf::from("C:/worktrees"), runtime.clone());
+    manager.remove_worktree(PathBuf::from("C:/worktrees/fix-crash")).await.unwrap();
+    let commands = runtime.commands.lock().unwrap();
+    assert_eq!(commands[0].args, vec!["-C", "C:/repo", "worktree", "remove", "C:/worktrees/fix-crash"]);
 }
