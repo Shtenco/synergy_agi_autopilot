@@ -9,6 +9,7 @@ async-trait.workspace = true
 autopilot-audit = { path = "../../crates/autopilot-audit" }
 autopilot-core = { path = "../../crates/autopilot-core" }
 autopilot-domain = { path = "../../crates/autopilot-domain" }
+autopilot-engine = { path = "../../crates/autopilot-engine" }
 autopilot-harness = { path = "../../crates/autopilot-harness" }
 autopilot-policy = { path = "../../crates/autopilot-policy" }
 autopilot-runtime = { path = "../../crates/autopilot-runtime" }
