@@ -32,6 +32,10 @@ enum Commands {
         workdir: PathBuf,
         #[arg(long)]
         model: Option<String>,
+        #[arg(long = "allow-env")]
+        allow_env: Vec<String>,
+        #[arg(long)]
+        timeout_ms: Option<u64>,
     },
 }
 
@@ -116,13 +120,16 @@ async fn main() -> Result<(), String> {
                 println!("{backend:?}");
             }
         }
-        Commands::Agent { backend, prompt, workdir, model } => {
+        Commands::Agent { backend, prompt, workdir, model, allow_env, timeout_ms } => {
             let backend = parse_backend(&backend)?;
             let mut spec = RunSpec::new(backend, prompt, workdir);
             if let Some(model) = model { spec = spec.model(model); }
+            for key in allow_env { spec = spec.allow_env(key); }
+            if let Some(timeout_ms) = timeout_ms { spec = spec.timeout_ms(timeout_ms); }
             let harness = AgentHarness::new(Arc::new(NativeRuntime), BackendRegistry::default());
             let result = harness.run(spec).await.map_err(|error| error.to_string())?;
             println!("termination={:?}", result.termination);
+            println!("duration_ms={}", result.duration_ms);
             if !result.stdout.is_empty() { print!("{}", result.stdout); }
             if !result.stderr.is_empty() { eprint!("{}", result.stderr); }
         }
