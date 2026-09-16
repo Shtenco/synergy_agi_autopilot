@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use autopilot_runtime::{CommandSpec, RuntimeAdapter, RuntimeError};
@@ -19,15 +19,34 @@ pub struct RunSpec {
     pub prompt: String,
     pub workdir: PathBuf,
     pub model: Option<String>,
+    pub env_allowlist: BTreeSet<String>,
+    pub timeout_ms: Option<u64>,
 }
 
 impl RunSpec {
     pub fn new(backend: BackendKind, prompt: impl Into<String>, workdir: PathBuf) -> Self {
-        Self { backend, prompt: prompt.into(), workdir, model: None }
+        Self {
+            backend,
+            prompt: prompt.into(),
+            workdir,
+            model: None,
+            env_allowlist: BTreeSet::new(),
+            timeout_ms: None,
+        }
     }
 
     pub fn model(mut self, model: impl Into<String>) -> Self {
         self.model = Some(model.into());
+        self
+    }
+
+    pub fn allow_env(mut self, key: impl Into<String>) -> Self {
+        self.env_allowlist.insert(key.into());
+        self
+    }
+
+    pub fn timeout_ms(mut self, timeout_ms: u64) -> Self {
+        self.timeout_ms = Some(timeout_ms);
         self
     }
 }
@@ -66,7 +85,15 @@ impl CliBackendSpec {
             args.push(flag.clone());
         }
         args.push(run.prompt.clone());
-        CommandSpec::new(self.program.clone()).args(args).cwd(run.workdir.clone())
+
+        let mut command = CommandSpec::new(self.program.clone()).args(args).cwd(run.workdir.clone());
+        for key in &run.env_allowlist {
+            command = command.allow_env(key.clone());
+        }
+        if let Some(timeout_ms) = run.timeout_ms {
+            command = command.timeout_ms(timeout_ms);
+        }
+        command
     }
 }
 
