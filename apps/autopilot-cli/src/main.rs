@@ -126,7 +126,7 @@ async fn main() -> Result<(), String> {
             if let Some(model) = model { spec = spec.model(model); }
             for key in allow_env { spec = spec.allow_env(key); }
             if let Some(timeout_ms) = timeout_ms { spec = spec.timeout_ms(timeout_ms); }
-            let harness = AgentHarness::new(Arc::new(NativeRuntime), BackendRegistry::default());
+            let harness = AgentHarness::new(Arc::new(NativeRuntime::default()), BackendRegistry::default());
             let result = harness.run(spec).await.map_err(|error| error.to_string())?;
             println!("termination={:?}", result.termination);
             println!("duration_ms={}", result.duration_ms);
