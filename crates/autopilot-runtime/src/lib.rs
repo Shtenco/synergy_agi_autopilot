@@ -1,9 +1,14 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use thiserror::Error;
 use tokio::process::Command;
+
+const BASE_ENV_KEYS: &[&str] = &[
+    "PATH", "SystemRoot", "ComSpec", "PATHEXT", "USERPROFILE", "HOME", "TEMP", "TMP",
+    "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "LANG", "LC_ALL", "USER", "USERNAME",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommandSpec {
@@ -11,11 +16,18 @@ pub struct CommandSpec {
     pub args: Vec<String>,
     pub cwd: Option<PathBuf>,
     pub env_allowlist: BTreeSet<String>,
+    pub timeout_ms: Option<u64>,
 }
 
 impl CommandSpec {
     pub fn new(program: impl Into<String>) -> Self {
-        Self { program: program.into(), args: Vec::new(), cwd: None, env_allowlist: BTreeSet::new() }
+        Self {
+            program: program.into(),
+            args: Vec::new(),
+            cwd: None,
+            env_allowlist: BTreeSet::new(),
+            timeout_ms: None,
+        }
     }
     pub fn arg(mut self, arg: impl Into<String>) -> Self { self.args.push(arg.into()); self }
     pub fn args<I, S>(mut self, args: I) -> Self where I: IntoIterator<Item = S>, S: Into<String> {
@@ -23,6 +35,7 @@ impl CommandSpec {
     }
     pub fn cwd(mut self, path: impl Into<PathBuf>) -> Self { self.cwd = Some(path.into()); self }
     pub fn allow_env(mut self, key: impl Into<String>) -> Self { self.env_allowlist.insert(key.into()); self }
+    pub fn timeout_ms(mut self, timeout_ms: u64) -> Self { self.timeout_ms = Some(timeout_ms); self }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,7 +43,10 @@ pub struct CommandResult { pub exit_code: i32, pub stdout: String, pub stderr: S
 
 #[derive(Debug, Error)]
 pub enum RuntimeError {
-    #[error("failed to start process: {0}")] Spawn(#[from] std::io::Error),
+    #[error("failed to start process: {0}")]
+    Spawn(#[from] std::io::Error),
+    #[error("process timed out after {timeout_ms} ms")]
+    TimedOut { timeout_ms: u64 },
 }
 
 #[async_trait]
@@ -51,14 +67,21 @@ impl RuntimeAdapter for NativeRuntime {
         let started = Instant::now();
         let mut command = Command::new(&spec.program);
         command.args(&spec.args);
+        command.kill_on_drop(true);
         if let Some(cwd) = spec.cwd { command.current_dir(cwd); }
-        if !spec.env_allowlist.is_empty() {
-            command.env_clear();
-            for key in &spec.env_allowlist {
-                if let Ok(value) = std::env::var(key) { command.env(key, value); }
-            }
+
+        command.env_clear();
+        for key in BASE_ENV_KEYS.iter().copied().chain(spec.env_allowlist.iter().map(String::as_str)) {
+            if let Ok(value) = std::env::var(key) { command.env(key, value); }
         }
-        let output = command.output().await?;
+
+        let output = match spec.timeout_ms {
+            Some(timeout_ms) => tokio::time::timeout(Duration::from_millis(timeout_ms), command.output())
+                .await
+                .map_err(|_| RuntimeError::TimedOut { timeout_ms })??,
+            None => command.output().await?,
+        };
+
         Ok(CommandResult {
             exit_code: output.status.code().unwrap_or(-1),
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
