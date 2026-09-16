@@ -1,5 +1,14 @@
 use autopilot_runtime::{CommandResult, CommandSpec, FakeRuntime, NativeRuntime, RuntimeAdapter};
 
+#[test]
+fn command_spec_requires_explicit_extra_environment_and_timeout() {
+    let spec = CommandSpec::new("agent")
+        .allow_env("OPENAI_API_KEY")
+        .timeout_ms(30_000);
+    assert!(spec.env_allowlist.contains("OPENAI_API_KEY"));
+    assert_eq!(spec.timeout_ms, Some(30_000));
+}
+
 #[tokio::test]
 async fn fake_runtime_returns_configured_result() {
     let expected = CommandResult { exit_code: 7, stdout: "out".into(), stderr: "err".into(), duration_ms: 3 };
