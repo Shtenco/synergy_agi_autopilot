@@ -33,15 +33,10 @@ pub struct CommandSpec {
 impl CommandSpec {
     pub fn new(program: impl Into<String>) -> Self {
         Self {
-            program: program.into(),
-            args: Vec::new(),
-            cwd: None,
-            env_allowlist: BTreeSet::new(),
-            timeout_ms: None,
-            profile: ExecutionProfile::Host,
+            program: program.into(), args: Vec::new(), cwd: None,
+            env_allowlist: BTreeSet::new(), timeout_ms: None, profile: ExecutionProfile::Host,
         }
     }
-
     pub fn arg(mut self, arg: impl Into<String>) -> Self { self.args.push(arg.into()); self }
     pub fn args<I, S>(mut self, args: I) -> Self where I: IntoIterator<Item = S>, S: Into<String> {
         self.args.extend(args.into_iter().map(Into::into)); self
@@ -141,6 +136,7 @@ impl RuntimeAdapter for WslRuntime {
         }
         let mut args = Vec::new();
         if let Some(distribution) = &self.distribution { args.extend(["--distribution".to_string(), distribution.clone()]); }
+        if let Some(cwd) = &spec.cwd { args.extend(["--cd".to_string(), cwd.to_string_lossy().into_owned()]); }
         args.push("--exec".into());
         args.push(spec.program.clone());
         args.extend(spec.args.clone());
@@ -165,11 +161,15 @@ impl DockerRuntime {
     }
     pub fn build_command(&self, spec: &CommandSpec) -> Result<CommandSpec, RuntimeError> {
         if self.image.trim().is_empty() { return Err(RuntimeError::Configuration("docker image is empty".into())); }
-        let mount_mode = if spec.profile == ExecutionProfile::ReadOnlyWorkspace { "ro" } else { "rw" };
-        let mount = format!("{}:{}:{}", self.workspace_host.to_string_lossy(), self.workspace_container, mount_mode);
+        let host_workspace = spec.cwd.as_ref().unwrap_or(&self.workspace_host);
         let mut args = vec![
             "run".into(), "--rm".into(), "--workdir".into(), self.workspace_container.clone(),
-            "--mount".into(), format!("type=bind,source={},target={},readonly={}", self.workspace_host.to_string_lossy(), self.workspace_container, spec.profile == ExecutionProfile::ReadOnlyWorkspace),
+            "--mount".into(), format!(
+                "type=bind,source={},target={},readonly={}",
+                host_workspace.to_string_lossy(),
+                self.workspace_container,
+                spec.profile == ExecutionProfile::ReadOnlyWorkspace
+            ),
             "--tmpfs".into(), "/tmp:rw,noexec,nosuid,size=268435456".into(),
         ];
         if spec.profile == ExecutionProfile::ReadOnlyWorkspace { args.extend(["--network".into(), "none".into()]); }
@@ -179,7 +179,6 @@ impl DockerRuntime {
         args.extend(spec.args.clone());
         let mut command = CommandSpec::new("docker").args(args).profile(ExecutionProfile::Host);
         if let Some(timeout) = spec.timeout_ms { command = command.timeout_ms(timeout); }
-        let _ = mount;
         Ok(command)
     }
 }
