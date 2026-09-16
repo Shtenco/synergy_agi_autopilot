@@ -73,8 +73,9 @@ input:focus, select:focus, textarea:focus { border-color: #46586a; box-shadow: 0
 .agent-copy strong { font-size: 11px; }
 .agent-copy span { font-size: 9px; color: #5f6978; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .agent-status { font-size: 8px; text-transform: uppercase; color: #6d7888; }
-.agent-status.online { color: #72dfa3; }
+.agent-status.online, .agent-status.passed { color: #72dfa3; }
 .agent-status.guarded { color: #d4ab63; }
+.agent-status.failed { color: #ff868d; }
 
 @media (max-width: 1180px) {
   .status-grid { grid-template-columns: repeat(2, 1fr); }
