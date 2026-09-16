@@ -25,7 +25,7 @@ Implemented in source:
 - structured verification Evidence;
 - deterministic unit/integration contracts for core behavior.
 
-### M1 — coding-agent harness and fleet infrastructure
+### M1 — coding-agent harness and autonomous execution infrastructure
 
 Implemented in source:
 
@@ -40,7 +40,8 @@ Implemented in source:
 - dependency-aware Agent Fleet Scheduler;
 - cycle/unknown-dependency validation;
 - parallel-writer protection for shared workspaces;
-- CLI commands for backend discovery and direct agent execution.
+- `AutonomousEngine` connecting Director -> Agent Harness -> Verification Pipeline -> bounded repair loop;
+- CLI commands for backend discovery, direct agent execution and autonomous goal execution.
 
 ### M2 — Windows Command Center
 
@@ -93,8 +94,10 @@ Human Goal / Windows Command Center
                                           v
                               Verification Evidence
                                           |
-                                          v
-                              Git / PR / CI / Release*
+                               fail -------+------ pass
+                                |                    |
+                                v                    v
+                         bounded repair       Git / PR / CI*
 ```
 
 `*` = planned adapter/integration rather than a production-ready implementation in the current branch.
@@ -123,7 +126,7 @@ cargo run -p open-autopilot -- demo --goal "verify the OPEN AUTOPILOT architectu
 cargo run -p open-autopilot -- backends
 ```
 
-### Run an installed coding agent
+### Run an installed coding agent directly
 
 ```bash
 cargo run -p open-autopilot -- agent \
@@ -133,14 +136,32 @@ cargo run -p open-autopilot -- agent \
   --timeout-ms 1800000
 ```
 
-Credentials are not inherited wholesale. Explicitly allow the environment variables a selected tool needs, for example:
+### Run a goal through the autonomous Director + verification + repair loop
 
 ```bash
-cargo run -p open-autopilot -- agent \
+cargo run -p open-autopilot -- autopilot \
+  --backend opencode \
+  --workdir "C:\\dev\\project" \
+  --goal "Fix the failing checkout flow and keep repairing until tests pass" \
+  --verify-program cargo \
+  --verify-arg test \
+  --verify-arg --workspace \
+  --max-repairs 2 \
+  --timeout-ms 1800000
+```
+
+The verification command is represented as an executable plus argument array, not a shell command string.
+
+Credentials are not inherited wholesale. Explicitly allow only the environment variables a selected tool needs, for example:
+
+```bash
+cargo run -p open-autopilot -- autopilot \
   --backend codex \
   --workdir "C:\\dev\\project" \
-  --prompt "Review this code" \
-  --allow-env OPENAI_API_KEY
+  --goal "Review and repair the project" \
+  --allow-env OPENAI_API_KEY \
+  --verify-program cargo \
+  --verify-arg test
 ```
 
 ## Windows desktop development
@@ -162,7 +183,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-A GitHub Actions workflow is committed for Windows and Ubuntu. At the time this branch was prepared, the connected repository's Actions jobs were terminating before runner assignment (`runner_id=0`, no executed steps), so this README does **not** claim that CI has verified the branch yet.
+A GitHub Actions workflow is committed for Windows and Ubuntu. At the time this branch was prepared, the connected repository's Actions jobs were terminating before runner assignment and exposing no executed workflow steps, so this README does **not** claim that CI has verified the branch yet.
 
 The Tauri crate is deliberately excluded from the root Rust workspace until dedicated desktop CI installs the appropriate Tauri system/build dependencies.
 
@@ -175,6 +196,7 @@ apps/
 crates/
   autopilot-domain/       Stable IDs, roles, states, evidence
   autopilot-core/         Director orchestration
+  autopilot-engine/       Real Director -> agent -> verification integration
   autopilot-policy/       Capability/risk policy engine
   autopilot-audit/        Audit abstractions
   autopilot-router/       Multi-model routing
@@ -188,8 +210,8 @@ docs/superpowers/         Architecture and implementation plans
 
 ## Next integration milestones
 
-- Wire the real Agent Fleet Scheduler into Director goal decomposition and parallel worktrees.
-- Route each role through Multi-Model Router and Agent Harness instead of the M0 fake executor.
+- Wire the Agent Fleet Scheduler directly into Director goal decomposition and parallel worktrees.
+- Route each specialist role through Multi-Model Router before selecting an Agent Harness backend/model.
 - Add WSL2 and Docker runtime adapters with health probing.
 - Add streaming stdout/stderr and structured agent events to the desktop app.
 - Persist goals, runs, audit events and project memory in SQLite.
