@@ -12,6 +12,7 @@ members = [
   "crates/autopilot-verification",
   "crates/autopilot-fleet",
   "crates/autopilot-engine",
+  "crates/autopilot-delivery",
   "apps/autopilot-cli",
 ]
 exclude = ["apps/desktop/src-tauri"]
@@ -27,6 +28,7 @@ async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "sync", "time"] }
 tracing = "0.1"
