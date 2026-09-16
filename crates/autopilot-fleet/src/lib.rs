@@ -32,18 +32,25 @@ impl FleetScheduler {
         for task in tasks {
             let id = task.id.clone();
             match map.entry(id.clone()) {
-                Entry::Vacant(slot) => { slot.insert(task); }
+                Entry::Vacant(slot) => {
+                    slot.insert(task);
+                }
                 Entry::Occupied(_) => return Err(FleetError::DuplicateTask(id)),
             }
         }
         for task in map.values() {
             for dependency in &task.dependencies {
                 if !map.contains_key(dependency) {
-                    return Err(FleetError::UnknownDependency { task: task.id.clone(), dependency: dependency.clone() });
+                    return Err(FleetError::UnknownDependency {
+                        task: task.id.clone(),
+                        dependency: dependency.clone(),
+                    });
                 }
             }
         }
-        if Self::has_cycle(&map) { return Err(FleetError::Cycle); }
+        if Self::has_cycle(&map) {
+            return Err(FleetError::Cycle);
+        }
         Ok(Self { tasks: map })
     }
 
@@ -56,7 +63,10 @@ impl FleetScheduler {
                 dependents.entry(dependency.clone()).or_default().push(task.id.clone());
             }
         }
-        let mut queue: VecDeque<String> = indegree.iter().filter_map(|(id, degree)| (*degree == 0).then_some(id.clone())).collect();
+        let mut queue: VecDeque<String> = indegree
+            .iter()
+            .filter_map(|(id, degree)| (*degree == 0).then_some(id.clone()))
+            .collect();
         let mut visited = 0usize;
         while let Some(id) = queue.pop_front() {
             visited += 1;
@@ -64,7 +74,9 @@ impl FleetScheduler {
                 for child in children {
                     let degree = indegree.get_mut(child).expect("dependent is indexed");
                     *degree -= 1;
-                    if *degree == 0 { queue.push_back(child.clone()); }
+                    if *degree == 0 {
+                        queue.push_back(child.clone());
+                    }
                 }
             }
         }
@@ -73,13 +85,38 @@ impl FleetScheduler {
 
     pub fn ready(&self, completed: &BTreeSet<String>, running: &[FleetTask]) -> Vec<FleetTask> {
         let running_ids: BTreeSet<&str> = running.iter().map(|task| task.id.as_str()).collect();
-        let mut writer_workspaces: BTreeSet<String> = running.iter().filter(|task| task.writes).map(|task| task.workspace_id.clone()).collect();
+        let mut active_writers: BTreeSet<String> = running
+            .iter()
+            .filter(|task| task.writes)
+            .map(|task| task.workspace_id.clone())
+            .collect();
+        let mut active_readers: BTreeSet<String> = running
+            .iter()
+            .filter(|task| !task.writes)
+            .map(|task| task.workspace_id.clone())
+            .collect();
+
         let mut ready = Vec::new();
         for task in self.tasks.values() {
-            if completed.contains(&task.id) || running_ids.contains(task.id.as_str()) { continue; }
-            if !task.dependencies.iter().all(|dependency| completed.contains(dependency)) { continue; }
-            if task.writes && writer_workspaces.contains(&task.workspace_id) { continue; }
-            if task.writes { writer_workspaces.insert(task.workspace_id.clone()); }
+            if completed.contains(&task.id) || running_ids.contains(task.id.as_str()) {
+                continue;
+            }
+            if !task.dependencies.iter().all(|dependency| completed.contains(dependency)) {
+                continue;
+            }
+
+            if task.writes {
+                if active_writers.contains(&task.workspace_id) || active_readers.contains(&task.workspace_id) {
+                    continue;
+                }
+                active_writers.insert(task.workspace_id.clone());
+            } else {
+                if active_writers.contains(&task.workspace_id) {
+                    continue;
+                }
+                active_readers.insert(task.workspace_id.clone());
+            }
+
             ready.push(task.clone());
         }
         ready
