@@ -178,6 +178,7 @@ impl DockerRuntime {
         args.push(spec.program.clone());
         args.extend(spec.args.clone());
         let mut command = CommandSpec::new("docker").args(args).profile(ExecutionProfile::Host);
+        for key in &spec.env_allowlist { command = command.allow_env(key.clone()); }
         if let Some(timeout) = spec.timeout_ms { command = command.timeout_ms(timeout); }
         Ok(command)
     }
