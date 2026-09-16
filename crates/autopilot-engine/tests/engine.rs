@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use async_trait::async_trait;
 use autopilot_audit::InMemoryAuditStore;
-use autopilot_core::GoalState;
+use autopilot_domain::GoalState;
 use autopilot_engine::{AutonomousEngine, EngineConfig, VerificationCommand};
 use autopilot_harness::BackendKind;
 use autopilot_runtime::{CommandResult, CommandSpec, RuntimeAdapter, RuntimeError};
