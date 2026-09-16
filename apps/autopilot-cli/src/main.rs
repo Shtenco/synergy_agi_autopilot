@@ -1,13 +1,16 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
 use autopilot_audit::{AuditStore, InMemoryAuditStore};
 use autopilot_core::{AgentExecutor, AgentOutcome, Director, DirectorConfig, GoalRequest, PlannedTask, Planner, VerificationOutcome, Verifier};
 use autopilot_domain::{AgentRole, Capability, Evidence, RiskClass};
-use autopilot_engine::{AutonomousEngine, EngineConfig, VerificationCommand};
+use autopilot_engine::{AutonomousEngine, EngineConfig, FleetEngine, FleetEngineConfig, VerificationCommand};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec};
 use autopilot_policy::PolicyEngine;
+use autopilot_router::{ModelCandidate, RoutingProfile};
 use autopilot_runtime::NativeRuntime;
 
 #[derive(Parser)]
@@ -58,6 +61,34 @@ enum Commands {
         #[arg(long = "verify-arg")]
         verify_args: Vec<String>,
     },
+    Fleet {
+        #[arg(long)]
+        goal: String,
+        #[arg(long)]
+        repo: PathBuf,
+        #[arg(long)]
+        worktree_root: Option<PathBuf>,
+        #[arg(long, default_value = "main")]
+        base_ref: String,
+        #[arg(long, default_value = "opencode")]
+        provider: String,
+        #[arg(long)]
+        model: Option<String>,
+        #[arg(long = "route")]
+        routes: Vec<String>,
+        #[arg(long, default_value = "best-quality")]
+        profile: String,
+        #[arg(long = "allow-env")]
+        allow_env: Vec<String>,
+        #[arg(long)]
+        timeout_ms: Option<u64>,
+        #[arg(long, default_value_t = 2)]
+        max_repairs: usize,
+        #[arg(long)]
+        verify_program: Option<String>,
+        #[arg(long = "verify-arg")]
+        verify_args: Vec<String>,
+    },
 }
 
 fn parse_backend(value: &str) -> Result<BackendKind, String> {
@@ -68,6 +99,88 @@ fn parse_backend(value: &str) -> Result<BackendKind, String> {
         "gemini" => Ok(BackendKind::Gemini),
         other => Err(format!("unsupported builtin backend: {other}")),
     }
+}
+
+fn parse_role(value: &str) -> Result<AgentRole, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "architect" => Ok(AgentRole::Architect),
+        "coder" => Ok(AgentRole::Coder),
+        "tester" => Ok(AgentRole::Tester),
+        "reviewer" => Ok(AgentRole::Reviewer),
+        "security" => Ok(AgentRole::Security),
+        "debugger" => Ok(AgentRole::Debugger),
+        other => Err(format!("unsupported fleet role in route: {other}")),
+    }
+}
+
+fn parse_profile(value: &str) -> Result<RoutingProfile, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "best" | "best-quality" | "quality" => Ok(RoutingProfile::BestQuality),
+        "balanced" => Ok(RoutingProfile::Balanced),
+        "budget" => Ok(RoutingProfile::Budget),
+        other => Err(format!("unsupported routing profile: {other}")),
+    }
+}
+
+fn parse_route(value: &str) -> Result<(AgentRole, String, String), String> {
+    let (role, target) = value
+        .split_once('=')
+        .ok_or_else(|| format!("route must use role=provider[:model], got: {value}"))?;
+    let role = parse_role(role)?;
+    let (provider, model) = match target.split_once(':') {
+        Some((provider, model)) => (provider.to_string(), model.to_string()),
+        None => (target.to_string(), String::new()),
+    };
+    if provider.trim().is_empty() {
+        return Err(format!("route provider is empty: {value}"));
+    }
+    Ok((role, provider, model))
+}
+
+fn candidate(provider: String, model: String, role: AgentRole) -> ModelCandidate {
+    let mut affinities = BTreeMap::new();
+    affinities.insert(role, 100);
+    ModelCandidate {
+        provider,
+        model,
+        quality: 90,
+        cost_per_million: 1.0,
+        latency_ms: 500,
+        healthy: true,
+        role_affinities: affinities,
+    }
+}
+
+fn fleet_candidates(
+    default_provider: String,
+    default_model: Option<String>,
+    routes: Vec<String>,
+) -> Result<Vec<ModelCandidate>, String> {
+    let mut overrides = BTreeMap::new();
+    for route in routes {
+        let (role, provider, model) = parse_route(&route)?;
+        overrides.insert(role, (provider, model));
+    }
+
+    let default_model = default_model.unwrap_or_default();
+    let roles = [
+        AgentRole::Architect,
+        AgentRole::Coder,
+        AgentRole::Tester,
+        AgentRole::Reviewer,
+        AgentRole::Security,
+        AgentRole::Debugger,
+    ];
+    Ok(roles
+        .into_iter()
+        .map(|role| {
+            let (provider, model) = overrides
+                .get(&role)
+                .cloned()
+                .unwrap_or_else(|| (default_provider.clone(), default_model.clone()));
+            candidate(provider, model, role)
+        })
+        .collect())
 }
 
 struct DemoPlanner;
@@ -191,6 +304,68 @@ async fn main() -> Result<(), String> {
             println!("repairs={}", summary.repairs);
             println!("evidence={}", summary.evidence.len());
             println!("audit_events={}", events.len());
+            for item in summary.evidence {
+                println!("evidence:{}:{}:{}", item.kind, item.passed, item.summary);
+            }
+        }
+        Commands::Fleet {
+            goal,
+            repo,
+            worktree_root,
+            base_ref,
+            provider,
+            model,
+            routes,
+            profile,
+            allow_env,
+            timeout_ms,
+            max_repairs,
+            verify_program,
+            verify_args,
+        } => {
+            let verification = verify_program
+                .map(|program| vec![VerificationCommand::new("acceptance", program, verify_args)])
+                .unwrap_or_default();
+            let candidates = fleet_candidates(provider, model, routes)?;
+            let worktree_root = worktree_root.unwrap_or_else(|| repo.join(".open-autopilot").join("worktrees"));
+            let runtime = Arc::new(NativeRuntime::default());
+            let audit = Arc::new(InMemoryAuditStore::default());
+            let engine = FleetEngine::new(
+                runtime,
+                audit.clone(),
+                FleetEngineConfig {
+                    repo_root: repo,
+                    worktree_root,
+                    base_ref,
+                    routing_profile: parse_profile(&profile)?,
+                    candidates,
+                    allowed_env: allow_env,
+                    timeout_ms,
+                    verification,
+                    max_repairs,
+                },
+            );
+            let summary = engine.run(goal).await?;
+            let events = audit.list_by_correlation(summary.correlation_id).await?;
+            println!("OPEN AUTOPILOT fleet run");
+            println!("final_state={:?}", summary.final_state);
+            println!("repairs={}", summary.repairs);
+            println!("role_runs={}", summary.role_runs.len());
+            println!("evidence={}", summary.evidence.len());
+            println!("audit_events={}", events.len());
+            if let Some(path) = summary.worktree {
+                println!("worktree={}", path.display());
+            }
+            for run in summary.role_runs {
+                println!(
+                    "role:{:?}:provider={}:model={}:backend={:?}:success={}",
+                    run.role,
+                    run.provider,
+                    if run.model.is_empty() { "<default>" } else { &run.model },
+                    run.backend,
+                    run.success
+                );
+            }
             for item in summary.evidence {
                 println!("evidence:{}:{}:{}", item.kind, item.passed, item.summary);
             }
