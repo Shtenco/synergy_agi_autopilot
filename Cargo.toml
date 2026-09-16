@@ -11,6 +11,7 @@ members = [
   "crates/autopilot-workspace",
   "crates/autopilot-verification",
   "crates/autopilot-fleet",
+  "crates/autopilot-engine",
   "apps/autopilot-cli",
 ]
 exclude = ["apps/desktop/src-tauri"]
