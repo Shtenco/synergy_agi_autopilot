@@ -18,6 +18,23 @@ type AgentRunResponse = {
   duration_ms: number;
 };
 
+type FleetRoleResponse = {
+  role: string;
+  provider: string;
+  model: string;
+  backend: string;
+  success: boolean;
+  summary: string;
+};
+
+type FleetRunResponse = {
+  final_state: string;
+  repairs: number;
+  evidence: string[];
+  role_runs: FleetRoleResponse[];
+  worktree: string | null;
+};
+
 type AgentForm = {
   backend: string;
   prompt: string;
@@ -25,6 +42,21 @@ type AgentForm = {
   model: string;
   allowEnv: string;
   timeoutMs: string;
+};
+
+type FleetForm = {
+  provider: string;
+  model: string;
+  goal: string;
+  repo: string;
+  baseRef: string;
+  profile: string;
+  routes: string;
+  allowEnv: string;
+  timeoutMs: string;
+  maxRepairs: string;
+  verifyProgram: string;
+  verifyArgs: string;
 };
 
 const NAV = [
@@ -65,17 +97,33 @@ export default function App() {
   const [overview, setOverview] = useState<Overview>(defaultOverview);
   const [backends, setBackends] = useState<string[]>(["OpenCode", "Codex", "Claude", "Gemini"]);
   const [activeNav, setActiveNav] = useState("Command Center");
+  const [mode, setMode] = useState<"agent" | "fleet">("fleet");
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState("Ready for autonomous goal");
-  const [result, setResult] = useState<AgentRunResponse | null>(null);
+  const [agentResult, setAgentResult] = useState<AgentRunResponse | null>(null);
+  const [fleetResult, setFleetResult] = useState<FleetRunResponse | null>(null);
   const [error, setError] = useState("");
-  const [form, setForm] = useState<AgentForm>({
+  const [agentForm, setAgentForm] = useState<AgentForm>({
     backend: "opencode",
     prompt: "Inspect this repository, identify the highest-impact engineering problem, implement a verified fix, and report the evidence.",
     workdir: "",
     model: "",
     allowEnv: "",
     timeoutMs: "1800000",
+  });
+  const [fleetForm, setFleetForm] = useState<FleetForm>({
+    provider: "opencode",
+    model: "",
+    goal: "Analyze this repository, implement the requested change, independently test/review/security-check it, and repair failures until the acceptance command passes.",
+    repo: "",
+    baseRef: "main",
+    profile: "best-quality",
+    routes: "",
+    allowEnv: "",
+    timeoutMs: "1800000",
+    maxRepairs: "2",
+    verifyProgram: "cargo",
+    verifyArgs: "test,--workspace",
   });
 
   useEffect(() => {
@@ -85,42 +133,91 @@ export default function App() {
 
   const output = useMemo(() => {
     if (error) return error;
-    if (!result) return "No run output yet. OPEN AUTOPILOT will stream richer events in the next desktop milestone.";
+    if (mode === "agent") {
+      if (!agentResult) return "No direct agent output yet.";
+      return [
+        `backend=${agentResult.backend}`,
+        `termination=${agentResult.termination}`,
+        `duration_ms=${agentResult.duration_ms}`,
+        "",
+        agentResult.stdout,
+        agentResult.stderr ? `\n[stderr]\n${agentResult.stderr}` : "",
+      ].join("\n");
+    }
+    if (!fleetResult) return "No fleet run yet. Full Fleet will show routed roles, managed worktree and verification evidence here.";
     return [
-      `backend=${result.backend}`,
-      `termination=${result.termination}`,
-      `duration_ms=${result.duration_ms}`,
+      `final_state=${fleetResult.final_state}`,
+      `repairs=${fleetResult.repairs}`,
+      `worktree=${fleetResult.worktree ?? "n/a"}`,
       "",
-      result.stdout,
-      result.stderr ? `\n[stderr]\n${result.stderr}` : "",
+      "[role runs]",
+      ...fleetResult.role_runs.map((run) =>
+        `${run.role} -> ${run.provider}/${run.model || "<default>"} (${run.backend}) success=${run.success}\n${run.summary}`
+      ),
+      "",
+      "[evidence]",
+      ...fleetResult.evidence,
     ].join("\n");
-  }, [error, result]);
+  }, [agentResult, error, fleetResult, mode]);
 
-  function patch<K extends keyof AgentForm>(key: K, value: AgentForm[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
+  function patchAgent<K extends keyof AgentForm>(key: K, value: AgentForm[K]) {
+    setAgentForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function runAgent(event: FormEvent) {
+  function patchFleet<K extends keyof FleetForm>(key: K, value: FleetForm[K]) {
+    setFleetForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function csv(value: string) {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+
+  function routes(value: string) {
+    return value.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
+  }
+
+  async function runSelected(event: FormEvent) {
     event.preventDefault();
     setError("");
-    setResult(null);
+    setAgentResult(null);
+    setFleetResult(null);
     setRunning(true);
-    setStatus("Agent running under local policy controls");
+    setStatus(mode === "fleet" ? "Director is orchestrating the Agent Fleet" : "Agent running under local policy controls");
     try {
-      const allowEnv = form.allowEnv.split(",").map((item) => item.trim()).filter(Boolean);
-      const timeoutMs = form.timeoutMs.trim() ? Number(form.timeoutMs) : null;
-      const response = await invoke<AgentRunResponse>("run_agent", {
-        request: {
-          backend: form.backend,
-          prompt: form.prompt,
-          workdir: form.workdir,
-          model: form.model.trim() || null,
-          allow_env: allowEnv,
-          timeout_ms: timeoutMs,
-        },
-      });
-      setResult(response);
-      setStatus(response.termination === "Exited" ? "Run completed" : `Run ended: ${response.termination}`);
+      if (mode === "agent") {
+        const response = await invoke<AgentRunResponse>("run_agent", {
+          request: {
+            backend: agentForm.backend,
+            prompt: agentForm.prompt,
+            workdir: agentForm.workdir,
+            model: agentForm.model.trim() || null,
+            allow_env: csv(agentForm.allowEnv),
+            timeout_ms: agentForm.timeoutMs.trim() ? Number(agentForm.timeoutMs) : null,
+          },
+        });
+        setAgentResult(response);
+        setStatus(response.termination === "Exited" ? "Run completed" : `Run ended: ${response.termination}`);
+      } else {
+        const response = await invoke<FleetRunResponse>("run_fleet", {
+          request: {
+            goal: fleetForm.goal,
+            repo: fleetForm.repo,
+            worktree_root: null,
+            base_ref: fleetForm.baseRef || "main",
+            provider: fleetForm.provider,
+            model: fleetForm.model.trim() || null,
+            routes: routes(fleetForm.routes),
+            profile: fleetForm.profile,
+            allow_env: csv(fleetForm.allowEnv),
+            timeout_ms: fleetForm.timeoutMs.trim() ? Number(fleetForm.timeoutMs) : null,
+            max_repairs: fleetForm.maxRepairs.trim() ? Number(fleetForm.maxRepairs) : 2,
+            verify_program: fleetForm.verifyProgram.trim() || null,
+            verify_args: csv(fleetForm.verifyArgs),
+          },
+        });
+        setFleetResult(response);
+        setStatus(response.final_state === "Completed" ? "Fleet completed with evidence" : `Fleet ended: ${response.final_state}`);
+      }
     } catch (reason) {
       setError(String(reason));
       setStatus("Run failed or was interrupted");
@@ -138,6 +235,8 @@ export default function App() {
       setError(String(reason));
     }
   }
+
+  const observedRole = (role: string) => fleetResult?.role_runs.find((run) => run.role === role);
 
   return (
     <div className="app-shell">
@@ -176,10 +275,10 @@ export default function App() {
         </header>
 
         <section className="status-grid">
-          <StatusCard label="DIRECTOR" value="ONLINE" detail="Deterministic goal state machine" accent="green" />
+          <StatusCard label="DIRECTOR" value="ONLINE" detail="DAG orchestration + bounded repair" accent="green" />
           <StatusCard label="DEPLOYMENT" value={overview.deployment} detail="Secrets and execution stay local" />
           <StatusCard label="POLICY GUARD" value="ENFORCED" detail={overview.policy} accent="green" />
-          <StatusCard label="RUNTIME" value={overview.runtime} detail="WSL2 / Docker adapters: M3" />
+          <StatusCard label="RUNTIME" value={overview.runtime} detail="Managed Git worktrees enabled" />
         </section>
 
         <section className="workspace-grid">
@@ -187,45 +286,128 @@ export default function App() {
             <div className="card-heading">
               <div>
                 <div className="eyebrow">GOAL LAUNCHER</div>
-                <h2>Give the agent an objective</h2>
+                <h2>{mode === "fleet" ? "Launch the autonomous Agent Fleet" : "Run one coding agent"}</h2>
               </div>
               <div className={running ? "run-indicator running" : "run-indicator"}>{running ? "RUNNING" : "READY"}</div>
             </div>
 
-            <form onSubmit={(event) => void runAgent(event)}>
-              <div className="field-row">
-                <label>
-                  Backend
-                  <select value={form.backend} onChange={(e) => patch("backend", e.target.value)}>
-                    {backends.map((backend) => <option value={backend.toLowerCase().replace(" ", "-")} key={backend}>{backend}</option>)}
-                  </select>
-                </label>
-                <label>
-                  Model override
-                  <input value={form.model} onChange={(e) => patch("model", e.target.value)} placeholder="Auto / provider default" />
-                </label>
-              </div>
-              <label>
-                Repository / work directory
-                <input value={form.workdir} onChange={(e) => patch("workdir", e.target.value)} placeholder="C:\\dev\\my-project" required />
-              </label>
-              <label>
-                Objective
-                <textarea value={form.prompt} onChange={(e) => patch("prompt", e.target.value)} rows={6} required />
-              </label>
-              <div className="field-row">
-                <label>
-                  Explicit environment allowlist
-                  <input value={form.allowEnv} onChange={(e) => patch("allowEnv", e.target.value)} placeholder="OPENAI_API_KEY, GH_TOKEN" />
-                </label>
-                <label>
-                  Timeout (ms)
-                  <input value={form.timeoutMs} onChange={(e) => patch("timeoutMs", e.target.value)} inputMode="numeric" />
-                </label>
-              </div>
+            <div className="field-row">
+              <button type="button" className={mode === "fleet" ? "primary-button" : "nav-item"} onClick={() => setMode("fleet")}>FULL FLEET</button>
+              <button type="button" className={mode === "agent" ? "primary-button" : "nav-item"} onClick={() => setMode("agent")}>SINGLE AGENT</button>
+            </div>
+
+            <form onSubmit={(event) => void runSelected(event)}>
+              {mode === "agent" ? (
+                <>
+                  <div className="field-row">
+                    <label>
+                      Backend
+                      <select value={agentForm.backend} onChange={(e) => patchAgent("backend", e.target.value)}>
+                        {backends.map((backend) => <option value={backend.toLowerCase().replace(" ", "-")} key={backend}>{backend}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      Model override
+                      <input value={agentForm.model} onChange={(e) => patchAgent("model", e.target.value)} placeholder="Auto / provider default" />
+                    </label>
+                  </div>
+                  <label>
+                    Repository / work directory
+                    <input value={agentForm.workdir} onChange={(e) => patchAgent("workdir", e.target.value)} placeholder="C:\\dev\\my-project" required />
+                  </label>
+                  <label>
+                    Objective
+                    <textarea value={agentForm.prompt} onChange={(e) => patchAgent("prompt", e.target.value)} rows={6} required />
+                  </label>
+                  <div className="field-row">
+                    <label>
+                      Explicit environment allowlist
+                      <input value={agentForm.allowEnv} onChange={(e) => patchAgent("allowEnv", e.target.value)} placeholder="OPENAI_API_KEY, GH_TOKEN" />
+                    </label>
+                    <label>
+                      Timeout (ms)
+                      <input value={agentForm.timeoutMs} onChange={(e) => patchAgent("timeoutMs", e.target.value)} inputMode="numeric" />
+                    </label>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="field-row">
+                    <label>
+                      Default provider
+                      <select value={fleetForm.provider} onChange={(e) => patchFleet("provider", e.target.value)}>
+                        <option value="opencode">OpenCode</option>
+                        <option value="openai">Codex / OpenAI</option>
+                        <option value="anthropic">Claude</option>
+                        <option value="google">Gemini</option>
+                      </select>
+                    </label>
+                    <label>
+                      Default model override
+                      <input value={fleetForm.model} onChange={(e) => patchFleet("model", e.target.value)} placeholder="Provider default" />
+                    </label>
+                  </div>
+                  <label>
+                    Repository
+                    <input value={fleetForm.repo} onChange={(e) => patchFleet("repo", e.target.value)} placeholder="C:\\dev\\my-project" required />
+                  </label>
+                  <label>
+                    Goal
+                    <textarea value={fleetForm.goal} onChange={(e) => patchFleet("goal", e.target.value)} rows={5} required />
+                  </label>
+                  <label>
+                    Role routing overrides
+                    <textarea
+                      value={fleetForm.routes}
+                      onChange={(e) => patchFleet("routes", e.target.value)}
+                      rows={3}
+                      placeholder={"architect=anthropic:MODEL\ncoder=openai:MODEL\ntester=google:MODEL\nreviewer=anthropic:MODEL"}
+                    />
+                  </label>
+                  <div className="field-row">
+                    <label>
+                      Routing profile
+                      <select value={fleetForm.profile} onChange={(e) => patchFleet("profile", e.target.value)}>
+                        <option value="best-quality">Best Quality</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="budget">Budget</option>
+                      </select>
+                    </label>
+                    <label>
+                      Base ref
+                      <input value={fleetForm.baseRef} onChange={(e) => patchFleet("baseRef", e.target.value)} />
+                    </label>
+                  </div>
+                  <div className="field-row">
+                    <label>
+                      Acceptance program
+                      <input value={fleetForm.verifyProgram} onChange={(e) => patchFleet("verifyProgram", e.target.value)} placeholder="cargo" />
+                    </label>
+                    <label>
+                      Acceptance args
+                      <input value={fleetForm.verifyArgs} onChange={(e) => patchFleet("verifyArgs", e.target.value)} placeholder="test,--workspace" />
+                    </label>
+                  </div>
+                  <div className="field-row">
+                    <label>
+                      Environment allowlist
+                      <input value={fleetForm.allowEnv} onChange={(e) => patchFleet("allowEnv", e.target.value)} placeholder="OPENAI_API_KEY, ANTHROPIC_API_KEY" />
+                    </label>
+                    <label>
+                      Repair budget / timeout
+                      <div className="field-row">
+                        <input value={fleetForm.maxRepairs} onChange={(e) => patchFleet("maxRepairs", e.target.value)} inputMode="numeric" />
+                        <input value={fleetForm.timeoutMs} onChange={(e) => patchFleet("timeoutMs", e.target.value)} inputMode="numeric" />
+                      </div>
+                    </label>
+                  </div>
+                </>
+              )}
               <div className="form-footer">
                 <div className="status-copy"><span className={running ? "pulse hot" : "pulse"} /> {status}</div>
-                <button className="primary-button" type="submit" disabled={running}>{running ? "Agent is working…" : "RUN AUTOPILOT"}</button>
+                <button className="primary-button" type="submit" disabled={running}>
+                  {running ? "AUTOPILOT IS WORKING…" : mode === "fleet" ? "RUN FULL AUTOPILOT" : "RUN AGENT"}
+                </button>
               </div>
             </form>
           </div>
@@ -234,7 +416,7 @@ export default function App() {
             <div className="card-heading compact">
               <div>
                 <div className="eyebrow">EXECUTION OUTPUT</div>
-                <h2>Agent console</h2>
+                <h2>Autopilot console</h2>
               </div>
               <span className="terminal-badge">LOCAL</span>
             </div>
@@ -248,19 +430,23 @@ export default function App() {
               <div className="eyebrow">AGENT FLEET</div>
               <h2>Director + specialist workers</h2>
             </div>
-            <span className="subtle">Parallel worktrees · Cross-review · Evidence gates</span>
+            <span className="subtle">Architect → Coder → parallel Tester / Reviewer / Security → Debugger repair</span>
           </div>
           <div className="fleet-grid">
-            {ROLES.map(([code, role, detail, roleStatus]) => (
-              <article className="agent-card" key={role}>
-                <div className="agent-avatar">{code}</div>
-                <div className="agent-copy">
-                  <strong>{role}</strong>
-                  <span>{detail}</span>
-                </div>
-                <span className={`agent-status ${roleStatus}`}>{roleStatus}</span>
-              </article>
-            ))}
+            {ROLES.map(([code, role, detail, roleStatus]) => {
+              const observed = observedRole(role);
+              const statusLabel = observed ? (observed.success ? "passed" : "failed") : roleStatus;
+              return (
+                <article className="agent-card" key={role}>
+                  <div className="agent-avatar">{code}</div>
+                  <div className="agent-copy">
+                    <strong>{role}</strong>
+                    <span>{observed ? `${observed.provider}/${observed.model || "default"}` : detail}</span>
+                  </div>
+                  <span className={`agent-status ${statusLabel}`}>{statusLabel}</span>
+                </article>
+              );
+            })}
           </div>
         </section>
       </main>
