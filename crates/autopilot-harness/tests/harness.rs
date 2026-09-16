@@ -23,6 +23,17 @@ fn codex_command_is_explicit_and_has_no_bypass_flag() {
 }
 
 #[test]
+fn projects_only_explicit_extra_environment() {
+    let registry = BackendRegistry::default();
+    let spec = RunSpec::new(BackendKind::Codex, "task", PathBuf::from("C:/repo"))
+        .allow_env("OPENAI_API_KEY")
+        .timeout_ms(120_000);
+    let command = registry.build_command(&spec).unwrap();
+    assert!(command.env_allowlist.contains("OPENAI_API_KEY"));
+    assert_eq!(command.timeout_ms, Some(120_000));
+}
+
+#[test]
 fn unknown_custom_backend_is_rejected() {
     let registry = BackendRegistry::default();
     let spec = RunSpec::new(BackendKind::Custom("missing".into()), "x", PathBuf::from("."));
