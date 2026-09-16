@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::sync::Arc;
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
@@ -39,10 +38,14 @@ struct DemoExecutor;
 #[async_trait]
 impl AgentExecutor for DemoExecutor {
     async fn execute(&self, task: &PlannedTask) -> Result<AgentOutcome, String> {
+        let role = match &task.role {
+            AgentRole::Coder => "Coder",
+            _ => "Specialist",
+        };
         Ok(AgentOutcome {
             objective: task.objective.clone(),
             success: true,
-            summary: format!("{} agent completed demo execution", match task.role { AgentRole::Coder => "Coder", _ => "Specialist" }),
+            summary: format!("{role} agent completed demo execution"),
         })
     }
 }
@@ -62,7 +65,7 @@ impl Verifier for DemoVerifier {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), String> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Demo { goal } => {
@@ -76,7 +79,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Arc::new(DemoVerifier),
             );
             let request = GoalRequest::new(goal).require(Capability::WriteWorkspace, RiskClass::Medium);
-            let summary = director.run_goal(request).await?;
+            let summary = director.run_goal(request).await.map_err(|error| error.to_string())?;
             let events = audit.list_by_correlation(summary.correlation_id).await?;
             println!("OPEN AUTOPILOT demo");
             println!("final_state={:?}", summary.final_state);
