@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use autopilot_audit::{AuditStore, InMemoryAuditStore};
 use autopilot_core::{AgentExecutor, AgentOutcome, Director, DirectorConfig, GoalRequest, PlannedTask, Planner, VerificationOutcome, Verifier};
 use autopilot_domain::{AgentRole, Capability, Evidence, RiskClass};
+use autopilot_engine::{AutonomousEngine, EngineConfig, VerificationCommand};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec};
 use autopilot_policy::PolicyEngine;
 use autopilot_runtime::NativeRuntime;
@@ -36,6 +37,26 @@ enum Commands {
         allow_env: Vec<String>,
         #[arg(long)]
         timeout_ms: Option<u64>,
+    },
+    Autopilot {
+        #[arg(long)]
+        backend: String,
+        #[arg(long)]
+        goal: String,
+        #[arg(long)]
+        workdir: PathBuf,
+        #[arg(long)]
+        model: Option<String>,
+        #[arg(long = "allow-env")]
+        allow_env: Vec<String>,
+        #[arg(long)]
+        timeout_ms: Option<u64>,
+        #[arg(long, default_value_t = 2)]
+        max_repairs: usize,
+        #[arg(long)]
+        verify_program: Option<String>,
+        #[arg(long = "verify-arg")]
+        verify_args: Vec<String>,
     },
 }
 
@@ -132,6 +153,47 @@ async fn main() -> Result<(), String> {
             println!("duration_ms={}", result.duration_ms);
             if !result.stdout.is_empty() { print!("{}", result.stdout); }
             if !result.stderr.is_empty() { eprint!("{}", result.stderr); }
+        }
+        Commands::Autopilot {
+            backend,
+            goal,
+            workdir,
+            model,
+            allow_env,
+            timeout_ms,
+            max_repairs,
+            verify_program,
+            verify_args,
+        } => {
+            let backend = parse_backend(&backend)?;
+            let verification = verify_program
+                .map(|program| vec![VerificationCommand::new("acceptance", program, verify_args)])
+                .unwrap_or_default();
+            let runtime = Arc::new(NativeRuntime::default());
+            let audit = Arc::new(InMemoryAuditStore::default());
+            let engine = AutonomousEngine::new(
+                runtime,
+                audit.clone(),
+                EngineConfig {
+                    backend,
+                    model,
+                    workdir,
+                    allowed_env: allow_env,
+                    timeout_ms,
+                    verification,
+                    max_repairs,
+                },
+            );
+            let summary = engine.run(goal).await.map_err(|error| error.to_string())?;
+            let events = audit.list_by_correlation(summary.correlation_id).await?;
+            println!("OPEN AUTOPILOT autonomous run");
+            println!("final_state={:?}", summary.final_state);
+            println!("repairs={}", summary.repairs);
+            println!("evidence={}", summary.evidence.len());
+            println!("audit_events={}", events.len());
+            for item in summary.evidence {
+                println!("evidence:{}:{}:{}", item.kind, item.passed, item.summary);
+            }
         }
     }
     Ok(())
