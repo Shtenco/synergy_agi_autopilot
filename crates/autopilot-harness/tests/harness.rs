@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
-use autopilot_runtime::{CommandResult, FakeRuntime};
+use autopilot_runtime::{CommandResult, ExecutionProfile, FakeRuntime};
 
 #[test]
 fn builtin_registry_exposes_expected_agents() {
@@ -15,10 +15,13 @@ fn builtin_registry_exposes_expected_agents() {
 #[test]
 fn codex_command_is_explicit_and_has_no_bypass_flag() {
     let registry = BackendRegistry::default();
-    let spec = RunSpec::new(BackendKind::Codex, "review this", PathBuf::from("C:/repo")).model("gpt-x");
+    let spec = RunSpec::new(BackendKind::Codex, "review this", PathBuf::from("C:/repo"))
+        .model("gpt-x")
+        .profile(ExecutionProfile::ReadOnlyWorkspace);
     let command = registry.build_command(&spec).unwrap();
     assert_eq!(command.program, "codex");
     assert_eq!(command.args, vec!["exec", "--model", "gpt-x", "review this"]);
+    assert_eq!(command.profile, ExecutionProfile::ReadOnlyWorkspace);
     assert!(!command.args.iter().any(|arg| arg.contains("bypass") || arg.contains("danger")));
 }
 
