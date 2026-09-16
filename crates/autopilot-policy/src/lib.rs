@@ -20,8 +20,15 @@ impl PolicyRule {
     }
 
     fn matches(&self, capability: &Capability, risk: RiskClass) -> bool {
-        self.capability.as_ref().map_or(true, |expected| expected == capability)
-            && self.min_risk.map_or(true, |minimum| risk >= minimum)
+        let capability_matches = match &self.capability {
+            Some(expected) => expected == capability,
+            None => true,
+        };
+        let risk_matches = match self.min_risk {
+            Some(minimum) => risk >= minimum,
+            None => true,
+        };
+        capability_matches && risk_matches
     }
 }
 
