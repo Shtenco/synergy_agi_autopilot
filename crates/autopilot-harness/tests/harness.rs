@@ -23,6 +23,14 @@ fn codex_command_is_explicit_and_has_no_bypass_flag() {
 }
 
 #[test]
+fn empty_model_uses_backend_default_without_model_flag() {
+    let registry = BackendRegistry::default();
+    let spec = RunSpec::new(BackendKind::Codex, "review this", PathBuf::from("C:/repo")).model("");
+    let command = registry.build_command(&spec).unwrap();
+    assert_eq!(command.args, vec!["exec", "review this"]);
+}
+
+#[test]
 fn projects_only_explicit_extra_environment() {
     let registry = BackendRegistry::default();
     let spec = RunSpec::new(BackendKind::Codex, "task", PathBuf::from("C:/repo"))
