@@ -1,13 +1,16 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
 use autopilot_audit::{AuditStore, InMemoryAuditStore};
 use autopilot_core::{AgentExecutor, AgentOutcome, Director, DirectorConfig, GoalRequest, PlannedTask, Planner, VerificationOutcome, Verifier};
 use autopilot_domain::{AgentRole, Capability, Evidence, RiskClass};
+use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec};
 use autopilot_policy::PolicyEngine;
+use autopilot_runtime::NativeRuntime;
 
 #[derive(Parser)]
-#[command(name = "open-autopilot", version, about = "OPEN AUTOPILOT core harness")]
+#[command(name = "open-autopilot", version, about = "OPEN AUTOPILOT local autonomous engineering harness")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -19,6 +22,27 @@ enum Commands {
         #[arg(long)]
         goal: String,
     },
+    Backends,
+    Agent {
+        #[arg(long)]
+        backend: String,
+        #[arg(long)]
+        prompt: String,
+        #[arg(long)]
+        workdir: PathBuf,
+        #[arg(long)]
+        model: Option<String>,
+    },
+}
+
+fn parse_backend(value: &str) -> Result<BackendKind, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "opencode" => Ok(BackendKind::OpenCode),
+        "codex" => Ok(BackendKind::Codex),
+        "claude" | "claude-code" => Ok(BackendKind::Claude),
+        "gemini" => Ok(BackendKind::Gemini),
+        other => Err(format!("unsupported builtin backend: {other}")),
+    }
 }
 
 struct DemoPlanner;
@@ -86,6 +110,21 @@ async fn main() -> Result<(), String> {
             println!("repairs={}", summary.repairs);
             println!("evidence={}", summary.evidence.len());
             println!("audit_events={}", events.len());
+        }
+        Commands::Backends => {
+            for backend in BackendRegistry::builtin_kinds() {
+                println!("{backend:?}");
+            }
+        }
+        Commands::Agent { backend, prompt, workdir, model } => {
+            let backend = parse_backend(&backend)?;
+            let mut spec = RunSpec::new(backend, prompt, workdir);
+            if let Some(model) = model { spec = spec.model(model); }
+            let harness = AgentHarness::new(Arc::new(NativeRuntime), BackendRegistry::default());
+            let result = harness.run(spec).await.map_err(|error| error.to_string())?;
+            println!("termination={:?}", result.termination);
+            if !result.stdout.is_empty() { print!("{}", result.stdout); }
+            if !result.stderr.is_empty() { eprint!("{}", result.stderr); }
         }
     }
     Ok(())
