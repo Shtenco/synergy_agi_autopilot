@@ -14,7 +14,7 @@ use autopilot_fleet::{FleetScheduler, FleetTask};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
-use autopilot_runtime::{CommandSpec, RuntimeAdapter};
+use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use autopilot_verification::{VerificationCheck, VerificationPipeline};
 use autopilot_workspace::WorkspaceManager;
 
@@ -31,11 +31,7 @@ impl VerificationCommand {
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        Self {
-            name: name.into(),
-            program: program.into(),
-            args: args.into_iter().map(Into::into).collect(),
-        }
+        Self { name: name.into(), program: program.into(), args: args.into_iter().map(Into::into).collect() }
     }
 }
 
@@ -72,20 +68,11 @@ struct HarnessExecutor {
 #[async_trait]
 impl AgentExecutor for HarnessExecutor {
     async fn execute(&self, task: &PlannedTask) -> Result<AgentOutcome, String> {
-        let mut spec = RunSpec::new(
-            self.config.backend.clone(),
-            task.objective.clone(),
-            self.config.workdir.clone(),
-        );
-        if let Some(model) = &self.config.model {
-            spec = spec.model(model.clone());
-        }
-        for key in &self.config.allowed_env {
-            spec = spec.allow_env(key.clone());
-        }
-        if let Some(timeout_ms) = self.config.timeout_ms {
-            spec = spec.timeout_ms(timeout_ms);
-        }
+        let mut spec = RunSpec::new(self.config.backend.clone(), task.objective.clone(), self.config.workdir.clone())
+            .profile(ExecutionProfile::WorkspaceWrite);
+        if let Some(model) = &self.config.model { spec = spec.model(model.clone()); }
+        for key in &self.config.allowed_env { spec = spec.allow_env(key.clone()); }
+        if let Some(timeout_ms) = self.config.timeout_ms { spec = spec.timeout_ms(timeout_ms); }
 
         let result = self.harness.run(spec).await.map_err(|error| error.to_string())?;
         let success = matches!(result.termination, Termination::Exited);
@@ -96,12 +83,7 @@ impl AgentExecutor for HarnessExecutor {
         } else {
             result.stderr
         };
-
-        Ok(AgentOutcome {
-            objective: task.objective.clone(),
-            success,
-            summary,
-        })
+        Ok(AgentOutcome { objective: task.objective.clone(), success, summary })
     }
 }
 
@@ -113,64 +95,38 @@ struct PipelineVerifier {
 
 #[async_trait]
 impl Verifier for PipelineVerifier {
-    async fn verify(
-        &self,
-        _request: &GoalRequest,
-        outcomes: &[AgentOutcome],
-    ) -> Result<VerificationOutcome, String> {
+    async fn verify(&self, _request: &GoalRequest, outcomes: &[AgentOutcome]) -> Result<VerificationOutcome, String> {
         if outcomes.is_empty() || outcomes.iter().any(|outcome| !outcome.success) {
             return Ok(VerificationOutcome {
                 passed: false,
-                evidence: vec![Evidence::failed(
-                    "agent-execution",
-                    "one or more agent executions failed",
-                )],
+                evidence: vec![Evidence::failed("agent-execution", "one or more agent executions failed")],
             });
         }
-
         if self.checks.is_empty() {
             return Ok(VerificationOutcome {
                 passed: true,
-                evidence: vec![Evidence::passed(
-                    "agent-execution",
-                    "agent completed and no verification commands were configured",
-                )],
+                evidence: vec![Evidence::passed("agent-execution", "agent completed and no verification commands were configured")],
             });
         }
-
-        let checks = self
-            .checks
-            .iter()
-            .map(|check| {
-                VerificationCheck::new(
-                    check.name.clone(),
-                    CommandSpec::new(check.program.clone())
-                        .args(check.args.clone())
-                        .cwd(self.workdir.clone()),
-                )
-            })
-            .collect();
+        let checks = self.checks.iter().map(|check| {
+            VerificationCheck::new(
+                check.name.clone(),
+                CommandSpec::new(check.program.clone())
+                    .args(check.args.clone())
+                    .cwd(self.workdir.clone())
+                    .profile(ExecutionProfile::WorkspaceWrite),
+            )
+        }).collect();
         let report = VerificationPipeline::new(self.runtime.clone(), false, checks)
-            .run()
-            .await
-            .map_err(|error| error.to_string())?;
-        Ok(VerificationOutcome {
-            passed: report.passed,
-            evidence: report.evidence,
-        })
+            .run().await.map_err(|error| error.to_string())?;
+        Ok(VerificationOutcome { passed: report.passed, evidence: report.evidence })
     }
 }
 
-pub struct AutonomousEngine {
-    director: Director,
-}
+pub struct AutonomousEngine { director: Director }
 
 impl AutonomousEngine {
-    pub fn new(
-        runtime: Arc<dyn RuntimeAdapter>,
-        audit: Arc<dyn AuditStore>,
-        config: EngineConfig,
-    ) -> Self {
+    pub fn new(runtime: Arc<dyn RuntimeAdapter>, audit: Arc<dyn AuditStore>, config: EngineConfig) -> Self {
         let executor = Arc::new(HarnessExecutor {
             harness: AgentHarness::new(runtime.clone(), BackendRegistry::default()),
             config: config.clone(),
@@ -181,9 +137,7 @@ impl AutonomousEngine {
             checks: config.verification.clone(),
         });
         let director = Director::new(
-            DirectorConfig {
-                max_repairs: config.max_repairs,
-            },
+            DirectorConfig { max_repairs: config.max_repairs },
             PolicyEngine::default(),
             audit,
             Arc::new(SingleTaskPlanner),
@@ -195,10 +149,7 @@ impl AutonomousEngine {
 
     pub async fn run(&self, objective: impl Into<String>) -> Result<GoalRunSummary, DirectorError> {
         self.director
-            .run_goal(
-                GoalRequest::new(objective)
-                    .require(Capability::ExecuteProcess, RiskClass::Medium),
-            )
+            .run_goal(GoalRequest::new(objective).require(Capability::ExecuteProcess, RiskClass::Medium))
             .await
     }
 }
@@ -248,20 +199,27 @@ pub fn backend_for_provider(provider: &str) -> Result<BackendKind, String> {
 }
 
 pub struct FleetEngine {
-    runtime: Arc<dyn RuntimeAdapter>,
+    writer_runtime: Arc<dyn RuntimeAdapter>,
+    review_runtime: Arc<dyn RuntimeAdapter>,
     audit: Arc<dyn AuditStore>,
     policy: PolicyEngine,
     config: FleetEngineConfig,
 }
 
 impl FleetEngine {
-    pub fn new(
-        runtime: Arc<dyn RuntimeAdapter>,
+    pub fn new(runtime: Arc<dyn RuntimeAdapter>, audit: Arc<dyn AuditStore>, config: FleetEngineConfig) -> Self {
+        Self::with_role_runtimes(runtime.clone(), runtime, audit, config)
+    }
+
+    pub fn with_role_runtimes(
+        writer_runtime: Arc<dyn RuntimeAdapter>,
+        review_runtime: Arc<dyn RuntimeAdapter>,
         audit: Arc<dyn AuditStore>,
         config: FleetEngineConfig,
     ) -> Self {
         Self {
-            runtime,
+            writer_runtime,
+            review_runtime,
             audit,
             policy: PolicyEngine::default(),
             config,
@@ -269,9 +227,7 @@ impl FleetEngine {
     }
 
     async fn audit(&self, correlation: CorrelationId, actor: &str, event: &str, status: &str) -> Result<(), String> {
-        self.audit
-            .append(AuditEvent::new(correlation, actor, event, RiskClass::Low, status))
-            .await
+        self.audit.append(AuditEvent::new(correlation, actor, event, RiskClass::Low, status)).await
     }
 
     fn route(&self, role: &AgentRole) -> Result<(ModelCandidate, BackendKind), String> {
@@ -279,6 +235,18 @@ impl FleetEngine {
             .ok_or_else(|| format!("no healthy model candidate for role {role:?}"))?;
         let backend = backend_for_provider(&candidate.provider)?;
         Ok((candidate, backend))
+    }
+
+    fn role_runtime(&self, role: &AgentRole) -> (Arc<dyn RuntimeAdapter>, ExecutionProfile) {
+        match role {
+            AgentRole::Architect | AgentRole::Tester | AgentRole::Reviewer | AgentRole::Security => {
+                (self.review_runtime.clone(), ExecutionProfile::ReadOnlyWorkspace)
+            }
+            AgentRole::Coder | AgentRole::Debugger => {
+                (self.writer_runtime.clone(), ExecutionProfile::WorkspaceWrite)
+            }
+            _ => (self.writer_runtime.clone(), ExecutionProfile::Host),
+        }
     }
 
     async fn run_role(
@@ -289,20 +257,17 @@ impl FleetEngine {
         correlation: CorrelationId,
     ) -> Result<RoleRun, String> {
         let (candidate, backend) = self.route(&role)?;
+        let (runtime, profile) = self.role_runtime(&role);
         self.audit(correlation, &format!("{role:?}"), "agent-start", "running").await?;
 
-        let mut spec = RunSpec::new(backend.clone(), prompt, workdir.clone()).model(candidate.model.clone());
-        for key in &self.config.allowed_env {
-            spec = spec.allow_env(key.clone());
-        }
-        if let Some(timeout_ms) = self.config.timeout_ms {
-            spec = spec.timeout_ms(timeout_ms);
-        }
+        let mut spec = RunSpec::new(backend.clone(), prompt, workdir.clone())
+            .model(candidate.model.clone())
+            .profile(profile);
+        for key in &self.config.allowed_env { spec = spec.allow_env(key.clone()); }
+        if let Some(timeout_ms) = self.config.timeout_ms { spec = spec.timeout_ms(timeout_ms); }
 
-        let result = AgentHarness::new(self.runtime.clone(), BackendRegistry::default())
-            .run(spec)
-            .await
-            .map_err(|error| error.to_string())?;
+        let result = AgentHarness::new(runtime, BackendRegistry::default())
+            .run(spec).await.map_err(|error| error.to_string())?;
         let success = matches!(result.termination, Termination::Exited);
         let summary = if success {
             result.stdout
@@ -316,8 +281,7 @@ impl FleetEngine {
             &format!("{role:?}"),
             "agent-finish",
             if success { "passed" } else { "failed" },
-        )
-        .await?;
+        ).await?;
 
         Ok(RoleRun {
             role,
@@ -337,68 +301,28 @@ impl FleetEngine {
                 evidence: vec![Evidence::passed("verification", "no verification commands configured")],
             });
         }
-        let checks = self
-            .config
-            .verification
-            .iter()
-            .map(|check| {
-                VerificationCheck::new(
-                    check.name.clone(),
-                    CommandSpec::new(check.program.clone())
-                        .args(check.args.clone())
-                        .cwd(workdir.to_path_buf()),
-                )
-            })
-            .collect();
-        let report = VerificationPipeline::new(self.runtime.clone(), false, checks)
-            .run()
-            .await
-            .map_err(|error| error.to_string())?;
-        Ok(VerificationOutcome {
-            passed: report.passed,
-            evidence: report.evidence,
-        })
+        let checks = self.config.verification.iter().map(|check| {
+            VerificationCheck::new(
+                check.name.clone(),
+                CommandSpec::new(check.program.clone())
+                    .args(check.args.clone())
+                    .cwd(workdir.to_path_buf())
+                    .profile(ExecutionProfile::WorkspaceWrite),
+            )
+        }).collect();
+        let report = VerificationPipeline::new(self.writer_runtime.clone(), false, checks)
+            .run().await.map_err(|error| error.to_string())?;
+        Ok(VerificationOutcome { passed: report.passed, evidence: report.evidence })
     }
 
     fn fleet_scheduler() -> Result<FleetScheduler, String> {
         FleetScheduler::new(vec![
-            FleetTask {
-                id: "architect".into(),
-                role: AgentRole::Architect,
-                dependencies: vec![],
-                writes: false,
-                workspace_id: "source".into(),
-            },
-            FleetTask {
-                id: "coder".into(),
-                role: AgentRole::Coder,
-                dependencies: vec!["architect".into()],
-                writes: true,
-                workspace_id: "change".into(),
-            },
-            FleetTask {
-                id: "tester".into(),
-                role: AgentRole::Tester,
-                dependencies: vec!["coder".into()],
-                writes: false,
-                workspace_id: "change".into(),
-            },
-            FleetTask {
-                id: "reviewer".into(),
-                role: AgentRole::Reviewer,
-                dependencies: vec!["coder".into()],
-                writes: false,
-                workspace_id: "change".into(),
-            },
-            FleetTask {
-                id: "security".into(),
-                role: AgentRole::Security,
-                dependencies: vec!["coder".into()],
-                writes: false,
-                workspace_id: "change".into(),
-            },
-        ])
-        .map_err(|error| error.to_string())
+            FleetTask { id: "architect".into(), role: AgentRole::Architect, dependencies: vec![], writes: false, workspace_id: "source".into() },
+            FleetTask { id: "coder".into(), role: AgentRole::Coder, dependencies: vec!["architect".into()], writes: true, workspace_id: "change".into() },
+            FleetTask { id: "tester".into(), role: AgentRole::Tester, dependencies: vec!["coder".into()], writes: false, workspace_id: "change".into() },
+            FleetTask { id: "reviewer".into(), role: AgentRole::Reviewer, dependencies: vec!["coder".into()], writes: false, workspace_id: "change".into() },
+            FleetTask { id: "security".into(), role: AgentRole::Security, dependencies: vec!["coder".into()], writes: false, workspace_id: "change".into() },
+        ]).map_err(|error| error.to_string())
     }
 
     fn worktree_label(objective: &str) -> String {
@@ -434,26 +358,20 @@ impl FleetEngine {
         let workspace = WorkspaceManager::new(
             self.config.repo_root.clone(),
             self.config.worktree_root.clone(),
-            self.runtime.clone(),
+            self.writer_runtime.clone(),
         );
         let mut completed = BTreeSet::new();
         let mut role_runs = Vec::new();
 
-        let initial = scheduler.ready(&completed, &[]);
-        let architect_task = initial
-            .into_iter()
-            .find(|task| task.role == AgentRole::Architect)
+        let architect_task = scheduler.ready(&completed, &[])
+            .into_iter().find(|task| task.role == AgentRole::Architect)
             .ok_or_else(|| "architect task was not ready".to_string())?;
-        let architect = self
-            .run_role(
-                architect_task.role,
-                format!(
-                    "Act as the Architect. Analyze the repository for this goal without editing files. Goal: {objective}. Return a concrete implementation plan, affected files, interfaces, risks, and acceptance checks."
-                ),
-                self.config.repo_root.clone(),
-                correlation,
-            )
-            .await?;
+        let architect = self.run_role(
+            architect_task.role,
+            format!("Act as the Architect. Analyze the repository for this goal without editing files. Goal: {objective}. Return a concrete implementation plan, affected files, interfaces, risks, and acceptance checks."),
+            self.config.repo_root.clone(),
+            correlation,
+        ).await?;
         if !architect.success {
             return Ok(FleetRunSummary {
                 final_state: GoalState::Failed,
@@ -468,26 +386,18 @@ impl FleetEngine {
         role_runs.push(architect);
         completed.insert("architect".to_string());
 
-        let worktree = workspace
-            .create_worktree(&Self::worktree_label(&objective), &self.config.base_ref)
-            .await
-            .map_err(|error| error.to_string())?;
+        let worktree = workspace.create_worktree(&Self::worktree_label(&objective), &self.config.base_ref)
+            .await.map_err(|error| error.to_string())?;
 
-        let coder_task = scheduler
-            .ready(&completed, &[])
-            .into_iter()
-            .find(|task| task.role == AgentRole::Coder)
+        let coder_task = scheduler.ready(&completed, &[])
+            .into_iter().find(|task| task.role == AgentRole::Coder)
             .ok_or_else(|| "coder task was not ready".to_string())?;
-        let coder = self
-            .run_role(
-                coder_task.role,
-                format!(
-                    "Act as the Coder. Implement the goal in this isolated worktree. Goal: {objective}\nArchitect plan:\n{architecture}\nDo not publish or force-push. Keep changes scoped and leave the worktree ready for independent review."
-                ),
-                worktree.path.clone(),
-                correlation,
-            )
-            .await?;
+        let coder = self.run_role(
+            coder_task.role,
+            format!("Act as the Coder. Implement the goal in this isolated worktree. Goal: {objective}\nArchitect plan:\n{architecture}\nDo not publish or force-push. Keep changes scoped and leave the worktree ready for independent review."),
+            worktree.path.clone(),
+            correlation,
+        ).await?;
         if !coder.success {
             role_runs.push(coder);
             return Ok(FleetRunSummary {
@@ -503,25 +413,15 @@ impl FleetEngine {
         completed.insert("coder".to_string());
 
         let ready_reviews = scheduler.ready(&completed, &[]);
-        let by_role: HashMap<AgentRole, FleetTask> = ready_reviews
-            .into_iter()
-            .map(|task| (task.role.clone(), task))
-            .collect();
+        let by_role: HashMap<AgentRole, FleetTask> = ready_reviews.into_iter()
+            .map(|task| (task.role.clone(), task)).collect();
         for role in [AgentRole::Tester, AgentRole::Reviewer, AgentRole::Security] {
-            if !by_role.contains_key(&role) {
-                return Err(format!("{role:?} task was not ready after coder"));
-            }
+            if !by_role.contains_key(&role) { return Err(format!("{role:?} task was not ready after coder")); }
         }
 
-        let tester_prompt = format!(
-            "Act as an independent Tester. Inspect the completed implementation for goal: {objective}. Run or inspect relevant tests, identify missing regression coverage, and do not modify files."
-        );
-        let reviewer_prompt = format!(
-            "Act as an independent Reviewer. Review the implementation for goal: {objective}. Focus on correctness, regressions, maintainability, concurrency, portability and requirement coverage. Do not modify files."
-        );
-        let security_prompt = format!(
-            "Act as an independent Security reviewer. Review the implementation for goal: {objective}. Check secret exposure, command injection, path traversal, unsafe process execution, dependency and supply-chain risk. Do not modify files."
-        );
+        let tester_prompt = format!("Act as an independent Tester. Inspect the completed implementation for goal: {objective}. Run or inspect relevant tests, identify missing regression coverage, and do not modify files.");
+        let reviewer_prompt = format!("Act as an independent Reviewer. Review the implementation for goal: {objective}. Focus on correctness, regressions, maintainability, concurrency, portability and requirement coverage. Do not modify files.");
+        let security_prompt = format!("Act as an independent Security reviewer. Review the implementation for goal: {objective}. Check secret exposure, command injection, path traversal, unsafe process execution, dependency and supply-chain risk. Do not modify files.");
         let review_workdir = worktree.path.clone();
         let (tester, reviewer, security) = tokio::join!(
             self.run_role(AgentRole::Tester, tester_prompt, review_workdir.clone(), correlation),
@@ -549,37 +449,26 @@ impl FleetEngine {
         let mut evidence = verification.evidence.clone();
         while !verification.passed && repairs < self.config.max_repairs {
             repairs += 1;
-            let debugger = self
-                .run_role(
-                    AgentRole::Debugger,
-                    format!(
-                        "Act as the Debugger. Verification failed for goal: {objective}. Diagnose the failures in this worktree, make the minimum corrective edits, and leave the repository ready for another verification cycle. Previous evidence: {evidence:?}"
-                    ),
-                    worktree.path.clone(),
-                    correlation,
-                )
-                .await?;
+            let debugger = self.run_role(
+                AgentRole::Debugger,
+                format!("Act as the Debugger. Verification failed for goal: {objective}. Diagnose the failures in this worktree, make the minimum corrective edits, and leave the repository ready for another verification cycle. Previous evidence: {evidence:?}"),
+                worktree.path.clone(),
+                correlation,
+            ).await?;
             let debugger_success = debugger.success;
             role_runs.push(debugger);
-            if !debugger_success {
-                break;
-            }
+            if !debugger_success { break; }
             verification = self.verify(&worktree.path).await?;
             evidence.extend(verification.evidence.clone());
         }
 
-        let final_state = if verification.passed {
-            GoalState::Completed
-        } else {
-            GoalState::Failed
-        };
+        let final_state = if verification.passed { GoalState::Completed } else { GoalState::Failed };
         self.audit(
             correlation,
             "Director",
             &format!("{final_state:?}"),
             if final_state == GoalState::Completed { "passed" } else { "failed" },
-        )
-        .await?;
+        ).await?;
 
         Ok(FleetRunSummary {
             final_state,
