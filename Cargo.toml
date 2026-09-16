@@ -7,6 +7,10 @@ members = [
   "crates/autopilot-router",
   "crates/autopilot-runtime",
   "crates/autopilot-core",
+  "crates/autopilot-harness",
+  "crates/autopilot-workspace",
+  "crates/autopilot-verification",
+  "crates/autopilot-fleet",
   "apps/autopilot-cli",
 ]
 
