@@ -7,3 +7,7 @@ license.workspace = true
 [dependencies]
 autopilot-domain = { path = "../autopilot-domain" }
 autopilot-runtime = { path = "../autopilot-runtime" }
+
+[dev-dependencies]
+async-trait.workspace = true
+tokio.workspace = true

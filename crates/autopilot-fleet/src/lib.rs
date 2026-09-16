@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque};
 use autopilot_domain::AgentRole;
 use thiserror::Error;
 
@@ -30,8 +30,10 @@ impl FleetScheduler {
     pub fn new(tasks: Vec<FleetTask>) -> Result<Self, FleetError> {
         let mut map = BTreeMap::new();
         for task in tasks {
-            if map.insert(task.id.clone(), task).is_some() {
-                return Err(FleetError::DuplicateTask(map.keys().next_back().cloned().unwrap_or_default()));
+            let id = task.id.clone();
+            match map.entry(id.clone()) {
+                Entry::Vacant(slot) => { slot.insert(task); }
+                Entry::Occupied(_) => return Err(FleetError::DuplicateTask(id)),
             }
         }
         for task in map.values() {
