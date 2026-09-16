@@ -12,6 +12,7 @@ autopilot-domain = { path = "../../crates/autopilot-domain" }
 autopilot-engine = { path = "../../crates/autopilot-engine" }
 autopilot-harness = { path = "../../crates/autopilot-harness" }
 autopilot-policy = { path = "../../crates/autopilot-policy" }
+autopilot-router = { path = "../../crates/autopilot-router" }
 autopilot-runtime = { path = "../../crates/autopilot-runtime" }
 clap.workspace = true
 tokio.workspace = true
