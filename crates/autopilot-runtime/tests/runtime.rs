@@ -1,21 +1,35 @@
+use std::path::PathBuf;
 use std::time::Duration;
-use autopilot_runtime::{CommandResult, CommandSpec, FakeRuntime, NativeRuntime, RuntimeAdapter, RuntimeError};
+use autopilot_runtime::{CommandResult, CommandSpec, ExecutionProfile, FakeRuntime, NativeRuntime, RuntimeAdapter, RuntimeError};
 
 #[test]
-fn command_spec_requires_explicit_extra_environment_and_timeout() {
+fn command_spec_requires_explicit_extra_environment_timeout_and_profile() {
     let spec = CommandSpec::new("agent")
         .allow_env("OPENAI_API_KEY")
-        .timeout_ms(30_000);
+        .timeout_ms(30_000)
+        .profile(ExecutionProfile::WorkspaceWrite);
     assert!(spec.env_allowlist.contains("OPENAI_API_KEY"));
     assert_eq!(spec.timeout_ms, Some(30_000));
+    assert_eq!(spec.profile, ExecutionProfile::WorkspaceWrite);
 }
 
 #[tokio::test]
 async fn fake_runtime_returns_configured_result() {
     let expected = CommandResult { exit_code: 7, stdout: "out".into(), stderr: "err".into(), duration_ms: 3 };
     let runtime = FakeRuntime::new(expected.clone());
-    let actual = runtime.execute(CommandSpec::new("ignored")).await.unwrap();
+    let actual = runtime.execute(CommandSpec::new("ignored").profile(ExecutionProfile::ReadOnlyWorkspace)).await.unwrap();
     assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn native_runtime_fails_closed_for_hard_read_only_workspace() {
+    let runtime = NativeRuntime::default();
+    let result = runtime.execute(
+        CommandSpec::new("ignored")
+            .cwd(PathBuf::from("."))
+            .profile(ExecutionProfile::ReadOnlyWorkspace)
+    ).await;
+    assert!(matches!(result, Err(RuntimeError::UnsupportedIsolation { .. })));
 }
 
 #[tokio::test]
