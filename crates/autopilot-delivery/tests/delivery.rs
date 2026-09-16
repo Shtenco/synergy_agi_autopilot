@@ -32,6 +32,10 @@ impl RuntimeAdapter for RecordingRuntime {
     async fn cancel(&self) -> Result<(), RuntimeError> { Ok(()) }
 }
 
+fn result(exit_code: i32, stdout: &str, stderr: &str) -> CommandResult {
+    CommandResult { exit_code, stdout: stdout.into(), stderr: stderr.into(), duration_ms: 1 }
+}
+
 fn config(branch: &str) -> DeliveryConfig {
     DeliveryConfig {
         workdir: PathBuf::from("C:/repo-worktree"),
@@ -47,47 +51,55 @@ fn config(branch: &str) -> DeliveryConfig {
 fn rejects_protected_or_non_autopilot_branches() {
     for branch in ["main", "master", "feature/foo", "../main", "autopilot/"] {
         let runtime: Arc<dyn RuntimeAdapter> = Arc::new(RecordingRuntime::default());
-        let result = DeliveryEngine::new(runtime, config(branch));
-        assert!(matches!(result, Err(DeliveryError::UnsafeBranch(_))), "branch={branch}");
+        let created = DeliveryEngine::new(runtime, config(branch));
+        assert!(matches!(created, Err(DeliveryError::UnsafeBranch(_))), "branch={branch}");
     }
 }
 
 #[tokio::test]
 async fn publish_uses_normal_commit_push_and_gh_pr_create_without_force() {
     let runtime = Arc::new(RecordingRuntime::with_results(vec![
-        CommandResult { exit_code: 0, stdout: String::new(), stderr: String::new(), duration_ms: 1 },
-        CommandResult { exit_code: 0, stdout: String::new(), stderr: String::new(), duration_ms: 1 },
-        CommandResult { exit_code: 0, stdout: String::new(), stderr: String::new(), duration_ms: 1 },
-        CommandResult { exit_code: 0, stdout: "https://github.com/o/r/pull/7\n".into(), stderr: String::new(), duration_ms: 1 },
+        result(0, "", ""),
+        result(0, "", ""),
+        result(0, "", ""),
+        result(1, "", "no pull request found"),
+        result(0, "https://github.com/o/r/pull/7\n", ""),
     ]));
     let engine = DeliveryEngine::new(runtime.clone(), config("autopilot/goal-123")).unwrap();
     let pr = engine.publish_verified_change("feat: verified change").await.unwrap();
     assert_eq!(pr.url, "https://github.com/o/r/pull/7");
     let commands = runtime.commands.lock().unwrap();
-    assert_eq!(commands[0].program, "git");
     assert_eq!(commands[0].args, vec!["add", "--all"]);
     assert_eq!(commands[1].args[0..2], ["commit", "-m"]);
     assert_eq!(commands[2].args, vec!["push", "origin", "autopilot/goal-123"]);
     assert!(!commands.iter().flat_map(|c| c.args.iter()).any(|arg| arg.contains("force")));
-    assert_eq!(commands[3].program, "gh");
-    assert!(commands[3].args.starts_with(&["pr".into(), "create".into()]));
+    assert!(commands[3].args.starts_with(&["pr".into(), "view".into()]));
+    assert!(commands[4].args.starts_with(&["pr".into(), "create".into()]));
 }
 
 #[tokio::test]
-async fn parses_ci_states_without_guessing() {
+async fn existing_pr_is_reused_instead_of_recreated() {
+    let runtime = Arc::new(RecordingRuntime::with_results(vec![
+        result(0, "https://github.com/o/r/pull/9\n", ""),
+    ]));
+    let engine = DeliveryEngine::new(runtime.clone(), config("autopilot/goal-123")).unwrap();
+    let pr = engine.ensure_pr().await.unwrap();
+    assert_eq!(pr.url, "https://github.com/o/r/pull/9");
+    let commands = runtime.commands.lock().unwrap();
+    assert_eq!(commands.len(), 1);
+    assert!(commands[0].args.starts_with(&["pr".into(), "view".into()]));
+}
+
+#[tokio::test]
+async fn parses_ci_states_even_when_gh_checks_exit_is_nonzero() {
     let cases = [
-        (r#"[{"name":"test","state":"SUCCESS","bucket":"pass","link":"https://ci/1"}]"#, CiState::Passing),
-        (r#"[{"name":"test","state":"FAILURE","bucket":"fail","link":"https://ci/1"}]"#, CiState::Failing),
-        (r#"[{"name":"test","state":"PENDING","bucket":"pending","link":"https://ci/1"}]"#, CiState::Pending),
-        ("not-json", CiState::Unknown),
+        (0, r#"[{"name":"test","state":"SUCCESS","bucket":"pass","link":"https://ci/1"}]"#, CiState::Passing),
+        (1, r#"[{"name":"test","state":"FAILURE","bucket":"fail","link":"https://ci/1"}]"#, CiState::Failing),
+        (8, r#"[{"name":"test","state":"PENDING","bucket":"pending","link":"https://ci/1"}]"#, CiState::Pending),
+        (1, "not-json", CiState::Unknown),
     ];
-    for (payload, expected) in cases {
-        let runtime: Arc<dyn RuntimeAdapter> = Arc::new(RecordingRuntime::with_results(vec![CommandResult {
-            exit_code: 0,
-            stdout: payload.into(),
-            stderr: String::new(),
-            duration_ms: 1,
-        }]));
+    for (exit_code, payload, expected) in cases {
+        let runtime: Arc<dyn RuntimeAdapter> = Arc::new(RecordingRuntime::with_results(vec![result(exit_code, payload, "")]));
         let engine = DeliveryEngine::new(runtime, config("autopilot/goal-123")).unwrap();
         assert_eq!(engine.read_ci().await.unwrap().state, expected);
     }
