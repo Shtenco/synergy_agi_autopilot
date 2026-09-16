@@ -17,10 +17,7 @@ use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRunt
 
 #[derive(Parser)]
 #[command(name = "open-autopilot", version, about = "OPEN AUTOPILOT local autonomous engineering harness")]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
+struct Cli { #[command(subcommand)] command: Commands }
 
 #[derive(Subcommand)]
 enum Commands {
@@ -116,15 +113,7 @@ fn parse_route(value: &str) -> Result<(AgentRole, String, String), String> {
 fn candidate(provider: String, model: String, role: AgentRole) -> ModelCandidate {
     let mut affinities = BTreeMap::new();
     affinities.insert(role, 100);
-    ModelCandidate {
-        provider,
-        model,
-        quality: 90,
-        cost_per_million: 1.0,
-        latency_ms: 500,
-        healthy: true,
-        role_affinities: affinities,
-    }
+    ModelCandidate { provider, model, quality: 90, cost_per_million: 1.0, latency_ms: 500, healthy: true, role_affinities: affinities }
 }
 
 fn fleet_candidates(default_provider: String, default_model: Option<String>, routes: Vec<String>) -> Result<Vec<ModelCandidate>, String> {
@@ -155,12 +144,8 @@ fn build_runtime(kind: &str, workspace: &Path, docker_image: Option<&str>, wsl_d
 }
 
 async fn current_branch(runtime: Arc<dyn RuntimeAdapter>, worktree: &Path) -> Result<String, String> {
-    let result = runtime.execute(
-        CommandSpec::new("git")
-            .args(["branch", "--show-current"])
-            .cwd(worktree.to_path_buf())
-            .profile(ExecutionProfile::WorkspaceWrite)
-    ).await.map_err(|error| error.to_string())?;
+    let result = runtime.execute(CommandSpec::new("git").args(["branch", "--show-current"]).cwd(worktree.to_path_buf()).profile(ExecutionProfile::WorkspaceWrite))
+        .await.map_err(|error| error.to_string())?;
     if result.exit_code != 0 { return Err(format!("cannot resolve delivery branch: {}", result.stderr)); }
     let branch = result.stdout.trim().to_string();
     if branch.is_empty() { return Err("delivery worktree is detached; refusing autonomous push".into()); }
@@ -169,12 +154,8 @@ async fn current_branch(runtime: Arc<dyn RuntimeAdapter>, worktree: &Path) -> Re
 
 async fn run_acceptance(runtime: Arc<dyn RuntimeAdapter>, worktree: &Path, checks: &[VerificationCommand]) -> Result<bool, String> {
     for check in checks {
-        let result = runtime.execute(
-            CommandSpec::new(check.program.clone())
-                .args(check.args.clone())
-                .cwd(worktree.to_path_buf())
-                .profile(ExecutionProfile::WorkspaceWrite)
-        ).await.map_err(|error| error.to_string())?;
+        let result = runtime.execute(CommandSpec::new(check.program.clone()).args(check.args.clone()).cwd(worktree.to_path_buf()).profile(ExecutionProfile::WorkspaceWrite))
+            .await.map_err(|error| error.to_string())?;
         if result.exit_code != 0 { return Ok(false); }
     }
     Ok(true)
@@ -191,39 +172,23 @@ async fn wait_for_ci(engine: &DeliveryEngine, attempts: usize, interval_ms: u64)
 }
 
 async fn repair_failing_ci(
-    runtime: Arc<dyn RuntimeAdapter>,
-    worktree: &Path,
-    goal: &str,
-    candidates: &[ModelCandidate],
-    routing_profile: RoutingProfile,
-    allowed_env: &[String],
-    timeout_ms: Option<u64>,
-    report: &CiReport,
+    runtime: Arc<dyn RuntimeAdapter>, worktree: &Path, goal: &str, candidates: &[ModelCandidate],
+    routing_profile: RoutingProfile, allowed_env: &[String], timeout_ms: Option<u64>, report: &CiReport,
 ) -> Result<(), String> {
     let candidate = ModelRouter::select(&AgentRole::Debugger, routing_profile, candidates)
         .ok_or_else(|| "no healthy Debugger model available for CI repair".to_string())?;
     let backend = backend_for_provider(&candidate.provider)?;
-    let failures = report.checks.iter()
-        .filter(|check| {
-            let bucket = check.bucket.to_ascii_lowercase();
-            let state = check.state.to_ascii_lowercase();
-            bucket == "fail" || state.contains("fail") || state.contains("error") || state.contains("cancel")
-        })
-        .map(|check| format!("{} [{}] {}", check.name, check.state, check.link))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let prompt = format!(
-        "Act as the Debugger. GitHub CI failed after a locally verified change. Goal: {goal}\nFailing checks:\n{failures}\nDiagnose and make the minimum corrective edits in this worktree. Do not force-push, publish releases, or expose secrets."
-    );
-    let mut spec = RunSpec::new(backend, prompt, worktree.to_path_buf())
-        .model(candidate.model)
-        .profile(ExecutionProfile::WorkspaceWrite);
+    let failures = report.checks.iter().filter(|check| {
+        let bucket = check.bucket.to_ascii_lowercase();
+        let state = check.state.to_ascii_lowercase();
+        bucket == "fail" || state.contains("fail") || state.contains("error") || state.contains("cancel")
+    }).map(|check| format!("{} [{}] {}", check.name, check.state, check.link)).collect::<Vec<_>>().join("\n");
+    let prompt = format!("Act as the Debugger. GitHub CI failed after a locally verified change. Goal: {goal}\nFailing checks:\n{failures}\nDiagnose and make the minimum corrective edits in this worktree. Do not force-push, publish releases, or expose secrets.");
+    let mut spec = RunSpec::new(backend, prompt, worktree.to_path_buf()).model(candidate.model).profile(ExecutionProfile::WorkspaceWrite);
     for key in allowed_env { spec = spec.allow_env(key.clone()); }
     if let Some(timeout) = timeout_ms { spec = spec.timeout_ms(timeout); }
     let result = AgentHarness::new(runtime, BackendRegistry::default()).run(spec).await.map_err(|error| error.to_string())?;
-    if !matches!(result.termination, Termination::Exited) {
-        return Err(format!("CI Debugger failed: {:?}: {}", result.termination, result.stderr));
-    }
+    if !matches!(result.termination, Termination::Exited) { return Err(format!("CI Debugger failed: {:?}: {}", result.termination, result.stderr)); }
     Ok(())
 }
 
@@ -246,10 +211,7 @@ struct DemoVerifier;
 impl Verifier for DemoVerifier {
     async fn verify(&self, _request: &GoalRequest, outcomes: &[AgentOutcome]) -> Result<VerificationOutcome, String> {
         let passed = !outcomes.is_empty() && outcomes.iter().all(|outcome| outcome.success);
-        Ok(VerificationOutcome {
-            passed,
-            evidence: vec![if passed { Evidence::passed("demo-verification", "all demo agent outcomes succeeded") } else { Evidence::failed("demo-verification", "one or more demo outcomes failed") }],
-        })
+        Ok(VerificationOutcome { passed, evidence: vec![if passed { Evidence::passed("demo-verification", "all demo agent outcomes succeeded") } else { Evidence::failed("demo-verification", "one or more demo outcomes failed") }] })
     }
 }
 
@@ -278,25 +240,25 @@ async fn main() -> Result<(), String> {
             let verification = verify_program.map(|program| vec![VerificationCommand::new("acceptance", program, verify_args)]).unwrap_or_default();
             let runtime = Arc::new(NativeRuntime::default());
             let audit = Arc::new(InMemoryAuditStore::default());
-            let engine = AutonomousEngine::new(runtime, audit.clone(), EngineConfig {
-                backend: parse_backend(&backend)?, model, workdir, allowed_env: allow_env, timeout_ms, verification, max_repairs,
-            });
+            let engine = AutonomousEngine::new(runtime, audit.clone(), EngineConfig { backend: parse_backend(&backend)?, model, workdir, allowed_env: allow_env, timeout_ms, verification, max_repairs });
             let summary = engine.run(goal).await.map_err(|error| error.to_string())?;
             println!("final_state={:?}\nrepairs={}\nevidence={}\naudit_events={}", summary.final_state, summary.repairs, summary.evidence.len(), audit.list_by_correlation(summary.correlation_id).await?.len());
         }
         Commands::Fleet {
             goal, repo, worktree_root, base_ref, provider, model, routes, profile, allow_env,
-            timeout_ms, max_repairs, verify_program, verify_args, runtime, review_runtime,
+            timeout_ms, max_repairs, verify_program, verify_args,
+            runtime: writer_runtime_kind, review_runtime: review_runtime_kind,
             docker_image, wsl_distro, publish, remote, max_ci_repairs, ci_poll_attempts, ci_poll_interval_ms,
         } => {
             let routing_profile = parse_profile(&profile)?;
             let verification = verify_program.map(|program| vec![VerificationCommand::new("acceptance", program, verify_args)]).unwrap_or_default();
+            if publish && verification.is_empty() { return Err("--publish requires --verify-program so autonomous delivery has local acceptance evidence".into()); }
             let candidates = fleet_candidates(provider, model, routes)?;
             let worktree_root = worktree_root.unwrap_or_else(|| repo.join(".open-autopilot").join("worktrees"));
-            let writer_runtime = build_runtime(&runtime, &repo, docker_image.as_deref(), wsl_distro.as_deref())?;
-            let review_runtime = build_runtime(&review_runtime, &repo, docker_image.as_deref(), wsl_distro.as_deref())?;
-            if !writer_runtime.probe().await { return Err(format!("writer runtime `{runtime}` is unavailable")); }
-            if !review_runtime.probe().await { return Err(format!("review runtime `{review_runtime_name}` is unavailable", review_runtime_name = review_runtime)); }
+            let writer_runtime = build_runtime(&writer_runtime_kind, &repo, docker_image.as_deref(), wsl_distro.as_deref())?;
+            let review_runtime = build_runtime(&review_runtime_kind, &repo, docker_image.as_deref(), wsl_distro.as_deref())?;
+            if !writer_runtime.probe().await { return Err(format!("writer runtime `{writer_runtime_kind}` is unavailable")); }
+            if !review_runtime.probe().await { return Err(format!("review runtime `{review_runtime_kind}` is unavailable")); }
 
             let audit = Arc::new(InMemoryAuditStore::default());
             let engine = FleetEngine::with_role_runtimes(
@@ -308,13 +270,10 @@ async fn main() -> Result<(), String> {
                 },
             );
             let summary = engine.run(goal.clone()).await?;
-            println!("OPEN AUTOPILOT fleet run\nfinal_state={:?}\nrepairs={}\nrole_runs={}\nevidence={}\naudit_events={}",
-                summary.final_state, summary.repairs, summary.role_runs.len(), summary.evidence.len(), audit.list_by_correlation(summary.correlation_id).await?.len());
+            println!("OPEN AUTOPILOT fleet run\nfinal_state={:?}\nrepairs={}\nrole_runs={}\nevidence={}\naudit_events={}", summary.final_state, summary.repairs, summary.role_runs.len(), summary.evidence.len(), audit.list_by_correlation(summary.correlation_id).await?.len());
             let worktree = summary.worktree.clone();
             if let Some(path) = &worktree { println!("worktree={}", path.display()); }
-            for run in &summary.role_runs {
-                println!("role:{:?}:provider={}:model={}:backend={:?}:success={}", run.role, run.provider, if run.model.is_empty() { "<default>" } else { &run.model }, run.backend, run.success);
-            }
+            for run in &summary.role_runs { println!("role:{:?}:provider={}:model={}:backend={:?}:success={}", run.role, run.provider, if run.model.is_empty() { "<default>" } else { &run.model }, run.backend, run.success); }
             for item in &summary.evidence { println!("evidence:{}:{}:{}", item.kind, item.passed, item.summary); }
 
             if !publish { return Ok(()); }
@@ -341,9 +300,7 @@ async fn main() -> Result<(), String> {
                         ci_repairs += 1;
                         println!("ci_repair_attempt={ci_repairs}");
                         repair_failing_ci(writer_runtime.clone(), &worktree, &goal, &candidates, routing_profile, &allow_env, timeout_ms, &report).await?;
-                        if !run_acceptance(writer_runtime.clone(), &worktree, &verification).await? {
-                            return Err("CI Debugger changed the worktree but local acceptance verification still fails".into());
-                        }
+                        if !run_acceptance(writer_runtime.clone(), &worktree, &verification).await? { return Err("CI Debugger changed the worktree but local acceptance verification still fails".into()); }
                         delivery.prepare_commit(&format!("fix: repair CI attempt {ci_repairs}")).await.map_err(|error| error.to_string())?;
                         delivery.push_branch().await.map_err(|error| error.to_string())?;
                     }
