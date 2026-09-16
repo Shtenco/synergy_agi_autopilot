@@ -7,13 +7,16 @@ fn docker_read_only_profile_builds_read_only_networkless_container() {
     let command = runtime.build_command(
         &CommandSpec::new("cargo")
             .args(["test", "--workspace"])
+            .cwd("C:/repo/worktree")
             .profile(ExecutionProfile::ReadOnlyWorkspace)
             .allow_env("CARGO_HOME")
     ).unwrap();
     assert_eq!(command.program, "docker");
+    assert!(command.args.iter().any(|item| item.contains("source=C:/repo/worktree")));
     assert!(command.args.iter().any(|item| item.contains("readonly=true")));
     assert!(command.args.windows(2).any(|pair| pair == ["--network", "none"]));
     assert!(command.args.windows(2).any(|pair| pair == ["--env", "CARGO_HOME"]));
+    assert!(command.env_allowlist.contains("CARGO_HOME"));
     assert!(command.args.contains(&"/tmp:rw,noexec,nosuid,size=268435456".to_string()));
 }
 
