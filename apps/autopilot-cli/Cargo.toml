@@ -1,0 +1,14 @@
+[package]
+name = "open-autopilot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+autopilot-audit = { path = "../../crates/autopilot-audit" }
+autopilot-core = { path = "../../crates/autopilot-core" }
+autopilot-domain = { path = "../../crates/autopilot-domain" }
+autopilot-policy = { path = "../../crates/autopilot-policy" }
+clap.workspace = true
+tokio.workspace = true
