@@ -78,8 +78,10 @@ impl CliBackendSpec {
     fn command(&self, run: &RunSpec) -> CommandSpec {
         let mut args = self.prefix_args.clone();
         if let (Some(flag), Some(model)) = (&self.model_flag, &run.model) {
-            args.push(flag.clone());
-            args.push(model.clone());
+            if !model.trim().is_empty() {
+                args.push(flag.clone());
+                args.push(model.clone());
+            }
         }
         if let Some(flag) = &self.prompt_flag {
             args.push(flag.clone());
