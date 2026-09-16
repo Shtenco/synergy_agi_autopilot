@@ -8,7 +8,7 @@ use autopilot_domain::{AgentRole, GoalState};
 use autopilot_engine::{FleetEngine, FleetEngineConfig, VerificationCommand};
 use autopilot_harness::BackendKind;
 use autopilot_router::{ModelCandidate, RoutingProfile};
-use autopilot_runtime::{CommandResult, CommandSpec, RuntimeAdapter, RuntimeError};
+use autopilot_runtime::{CommandResult, CommandSpec, ExecutionProfile, RuntimeAdapter, RuntimeError};
 
 #[derive(Default)]
 struct RecordingRuntime {
@@ -44,7 +44,8 @@ fn candidate(provider: &str, model: &str, quality: u8, role: AgentRole) -> Model
 
 #[tokio::test]
 async fn fleet_engine_routes_roles_and_completes_cross_review_dag() {
-    let runtime = Arc::new(RecordingRuntime::default());
+    let writer_runtime = Arc::new(RecordingRuntime::default());
+    let review_runtime = Arc::new(RecordingRuntime::default());
     let audit = Arc::new(InMemoryAuditStore::default());
     let config = FleetEngineConfig {
         repo_root: PathBuf::from("C:/repo"),
@@ -65,7 +66,7 @@ async fn fleet_engine_routes_roles_and_completes_cross_review_dag() {
         max_repairs: 1,
     };
 
-    let engine = FleetEngine::new(runtime.clone(), audit, config);
+    let engine = FleetEngine::with_role_runtimes(writer_runtime.clone(), review_runtime.clone(), audit, config);
     let result = engine.run("implement feature safely").await.unwrap();
 
     assert_eq!(result.final_state, GoalState::Completed);
@@ -75,9 +76,13 @@ async fn fleet_engine_routes_roles_and_completes_cross_review_dag() {
     assert!(result.role_runs.iter().any(|run| run.role == AgentRole::Reviewer));
     assert!(result.role_runs.iter().any(|run| run.role == AgentRole::Security));
 
-    let commands = runtime.commands.lock().unwrap();
-    assert!(commands.iter().any(|command| command.program == "git" && command.args.iter().any(|arg| arg == "worktree")));
-    assert!(commands.iter().any(|command| command.program == "codex" && command.args.iter().any(|arg| arg == "coder-model")));
+    let writer_commands = writer_runtime.commands.lock().unwrap();
+    assert!(writer_commands.iter().any(|command| command.program == "git" && command.args.iter().any(|arg| arg == "worktree")));
+    assert!(writer_commands.iter().any(|command| command.program == "codex" && command.args.iter().any(|arg| arg == "coder-model") && command.profile == ExecutionProfile::WorkspaceWrite));
+
+    let review_commands = review_runtime.commands.lock().unwrap();
+    assert!(review_commands.iter().any(|command| command.program == "opencode" && command.profile == ExecutionProfile::ReadOnlyWorkspace));
+    assert!(review_commands.iter().filter(|command| command.profile == ExecutionProfile::ReadOnlyWorkspace).count() >= 4);
 }
 
 #[test]
