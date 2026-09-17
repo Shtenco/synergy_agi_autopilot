@@ -12,6 +12,7 @@ use autopilot_runtime::{DockerRuntime, NativeRuntime, RuntimeAdapter};
 use autopilot_store::SqliteStore;
 use chrono::Duration;
 use clap::Subcommand;
+use tokio::sync::oneshot;
 use uuid::Uuid;
 
 #[derive(Subcommand)]
@@ -116,7 +117,31 @@ pub async fn handle(command: MissionCommands) -> Result<(), String> {
                     max_repairs,
                 },
             );
+
+            let (heartbeat_stop_tx, mut heartbeat_stop_rx) = oneshot::channel::<()>();
+            let heartbeat_queue = queue.clone();
+            let heartbeat_owner = owner.clone();
+            let heartbeat_mission = mission.id;
+            let heartbeat_interval_secs = (lease_seconds / 3).max(1) as u64;
+            let heartbeat_task = tokio::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(heartbeat_interval_secs));
+                interval.tick().await;
+                loop {
+                    tokio::select! {
+                        _ = &mut heartbeat_stop_rx => break,
+                        _ = interval.tick() => {
+                            if heartbeat_queue.heartbeat(heartbeat_mission, &heartbeat_owner).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+
             let summary = engine.run(mission.objective.clone()).await;
+            let _ = heartbeat_stop_tx.send(());
+            let _ = heartbeat_task.await;
+
             match summary {
                 Ok(summary) if summary.final_state == GoalState::Completed => {
                     let worktree = summary.worktree.as_ref().map(|p| p.to_string_lossy().into_owned());
