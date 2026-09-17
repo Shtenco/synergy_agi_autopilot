@@ -1,3 +1,5 @@
+mod missions;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -9,9 +11,7 @@ use autopilot_domain::{AgentRole, GoalState};
 use autopilot_engine::{backend_for_provider, FleetEngine, FleetEngineConfig, VerificationCommand};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
-use autopilot_runtime::{
-    CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime,
-};
+use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -130,9 +130,7 @@ fn parse_profile(value: Option<&str>) -> Result<RoutingProfile, String> {
 }
 
 fn parse_route(value: &str) -> Result<(AgentRole, String, String), String> {
-    let (role, target) = value
-        .split_once('=')
-        .ok_or_else(|| format!("route must use role=provider[:model], got: {value}"))?;
+    let (role, target) = value.split_once('=').ok_or_else(|| format!("route must use role=provider[:model], got: {value}"))?;
     let role = parse_role(role)?;
     let (provider, model) = match target.split_once(':') {
         Some((provider, model)) => (provider.to_string(), model.to_string()),
@@ -145,10 +143,7 @@ fn parse_route(value: &str) -> Result<(AgentRole, String, String), String> {
 fn candidate(provider: String, model: String, role: AgentRole) -> ModelCandidate {
     let mut affinities = BTreeMap::new();
     affinities.insert(role, 100);
-    ModelCandidate {
-        provider, model, quality: 90, cost_per_million: 1.0, latency_ms: 500,
-        healthy: true, role_affinities: affinities,
-    }
+    ModelCandidate { provider, model, quality: 90, cost_per_million: 1.0, latency_ms: 500, healthy: true, role_affinities: affinities }
 }
 
 fn fleet_candidates(default_provider: String, default_model: Option<String>, routes: Vec<String>) -> Result<Vec<ModelCandidate>, String> {
@@ -162,19 +157,12 @@ fn fleet_candidates(default_provider: String, default_model: Option<String>, rou
         AgentRole::Architect, AgentRole::Coder, AgentRole::Tester,
         AgentRole::Reviewer, AgentRole::Security, AgentRole::Debugger,
     ].into_iter().map(|role| {
-        let (provider, model) = overrides.get(&role).cloned()
-            .unwrap_or_else(|| (default_provider.clone(), default_model.clone()));
+        let (provider, model) = overrides.get(&role).cloned().unwrap_or_else(|| (default_provider.clone(), default_model.clone()));
         candidate(provider, model, role)
     }).collect())
 }
 
-fn build_runtime(
-    kind: &str,
-    workspace: &Path,
-    docker_image: Option<&str>,
-    wsl_distro: Option<&str>,
-    shared_native: NativeRuntime,
-) -> Result<Arc<dyn RuntimeAdapter>, String> {
+fn build_runtime(kind: &str, workspace: &Path, docker_image: Option<&str>, wsl_distro: Option<&str>, shared_native: NativeRuntime) -> Result<Arc<dyn RuntimeAdapter>, String> {
     match kind.trim().to_ascii_lowercase().as_str() {
         "native" | "windows" => Ok(Arc::new(shared_native)),
         "wsl" | "wsl2" => Ok(Arc::new(WslRuntime::with_native(shared_native, wsl_distro.map(str::to_string)))),
@@ -220,14 +208,9 @@ async fn wait_for_ci(engine: &DeliveryEngine, attempts: usize, interval_ms: u64)
 }
 
 async fn repair_failing_ci(
-    runtime: Arc<dyn RuntimeAdapter>,
-    worktree: &Path,
-    goal: &str,
-    candidates: &[ModelCandidate],
-    routing_profile: RoutingProfile,
-    allowed_env: &[String],
-    timeout_ms: Option<u64>,
-    report: &CiReport,
+    runtime: Arc<dyn RuntimeAdapter>, worktree: &Path, goal: &str,
+    candidates: &[ModelCandidate], routing_profile: RoutingProfile,
+    allowed_env: &[String], timeout_ms: Option<u64>, report: &CiReport,
 ) -> Result<(), String> {
     let candidate = ModelRouter::select(&AgentRole::Debugger, routing_profile, candidates)
         .ok_or_else(|| "no healthy Debugger model available for CI repair".to_string())?;
@@ -237,9 +220,7 @@ async fn repair_failing_ci(
         let state = check.state.to_ascii_lowercase();
         bucket == "fail" || state.contains("fail") || state.contains("error") || state.contains("cancel")
     }).map(|check| format!("{} [{}] {}", check.name, check.state, check.link)).collect::<Vec<_>>().join("\n");
-    let prompt = format!(
-        "Act as the Debugger. GitHub CI failed after a locally verified change. Goal: {goal}\nFailing checks:\n{failures}\nDiagnose and make the minimum corrective edits in this worktree. Do not force-push, publish releases, or expose secrets."
-    );
+    let prompt = format!("Act as the Debugger. GitHub CI failed after a locally verified change. Goal: {goal}\nFailing checks:\n{failures}\nDiagnose and make the minimum corrective edits in this worktree. Do not force-push, publish releases, or expose secrets.");
     let mut spec = RunSpec::new(backend, prompt, worktree.to_path_buf())
         .model(candidate.model).profile(ExecutionProfile::WorkspaceWrite);
     for key in allowed_env { spec = spec.allow_env(key.clone()); }
@@ -259,7 +240,7 @@ fn system_overview() -> SystemOverview {
         autonomy: "Full Autonomy",
         deployment: "Hybrid local-first",
         runtime: "Native Windows + WSL2 + Docker",
-        policy: "Hard read-only review via Docker; no force-push; publish is explicit opt-in",
+        policy: "Hard read-only review via Docker; durable missions; no force-push; publish is explicit opt-in",
         version: env!("CARGO_PKG_VERSION"),
     }
 }
@@ -303,17 +284,11 @@ async fn run_fleet(request: FleetRunRequest, state: State<'_, AppState>) -> Resu
     if publish && verification.is_empty() {
         return Err("Publish requires a verification command so delivery has local acceptance evidence".into());
     }
-    let candidates = fleet_candidates(
-        request.provider.unwrap_or_else(|| "opencode".into()), request.model, request.routes,
-    )?;
+    let candidates = fleet_candidates(request.provider.unwrap_or_else(|| "opencode".into()), request.model, request.routes)?;
     let writer_runtime_name = request.writer_runtime.unwrap_or_else(|| "native".into());
     let review_runtime_name = request.review_runtime.unwrap_or_else(|| "docker".into());
-    let writer_runtime = build_runtime(
-        &writer_runtime_name, &repo, request.docker_image.as_deref(), request.wsl_distro.as_deref(), state.runtime.clone(),
-    )?;
-    let review_runtime = build_runtime(
-        &review_runtime_name, &repo, request.docker_image.as_deref(), request.wsl_distro.as_deref(), state.runtime.clone(),
-    )?;
+    let writer_runtime = build_runtime(&writer_runtime_name, &repo, request.docker_image.as_deref(), request.wsl_distro.as_deref(), state.runtime.clone())?;
+    let review_runtime = build_runtime(&review_runtime_name, &repo, request.docker_image.as_deref(), request.wsl_distro.as_deref(), state.runtime.clone())?;
     if !writer_runtime.probe().await { return Err(format!("writer runtime `{writer_runtime_name}` is unavailable")); }
     if !review_runtime.probe().await { return Err(format!("review runtime `{review_runtime_name}` is unavailable")); }
 
@@ -369,11 +344,7 @@ async fn run_fleet(request: FleetRunRequest, state: State<'_, AppState>) -> Resu
     let max_ci_repairs = request.max_ci_repairs.unwrap_or(2);
     let mut ci_repairs = 0usize;
     loop {
-        let report = wait_for_ci(
-            &delivery,
-            request.ci_poll_attempts.unwrap_or(12),
-            request.ci_poll_interval_ms.unwrap_or(5_000),
-        ).await?;
+        let report = wait_for_ci(&delivery, request.ci_poll_attempts.unwrap_or(12), request.ci_poll_interval_ms.unwrap_or(5_000)).await?;
         response.ci_state = Some(format!("{:?}", report.state));
         match report.state {
             CiState::Passing => break,
@@ -381,10 +352,7 @@ async fn run_fleet(request: FleetRunRequest, state: State<'_, AppState>) -> Resu
             CiState::Unknown => return Err("CI state is unknown; refusing to claim delivery success".into()),
             CiState::Failing if ci_repairs < max_ci_repairs => {
                 ci_repairs += 1;
-                repair_failing_ci(
-                    writer_runtime.clone(), &worktree, &goal, &candidates, routing_profile,
-                    &allowed_env, timeout_ms, &report,
-                ).await?;
+                repair_failing_ci(writer_runtime.clone(), &worktree, &goal, &candidates, routing_profile, &allowed_env, timeout_ms, &report).await?;
                 if !run_acceptance(writer_runtime.clone(), &worktree, &verification).await? {
                     return Err("CI Debugger changed the worktree but local acceptance verification still fails".into());
                 }
@@ -402,14 +370,26 @@ async fn run_fleet(request: FleetRunRequest, state: State<'_, AppState>) -> Resu
 #[tauri::command]
 async fn stop_all(state: State<'_, AppState>) -> Result<String, String> {
     state.runtime.cancel().await.map_err(|error| error.to_string())?;
-    Ok("Emergency stop sent to active Native/WSL/Docker execution".into())
+    Ok("Emergency stop sent to active Native/WSL/Docker execution; durable mission state preserved".into())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let mission_state = missions::init_state().expect("failed to initialize OPEN AUTOPILOT state.db");
     tauri::Builder::default()
         .manage(AppState { runtime: NativeRuntime::default() })
-        .invoke_handler(tauri::generate_handler![system_overview, list_backends, run_agent, run_fleet, stop_all])
+        .manage(mission_state)
+        .invoke_handler(tauri::generate_handler![
+            system_overview,
+            list_backends,
+            run_agent,
+            run_fleet,
+            stop_all,
+            missions::mission_enqueue,
+            missions::mission_list,
+            missions::mission_recover,
+            missions::mission_cancel
+        ])
         .run(tauri::generate_context!())
         .expect("error while running OPEN AUTOPILOT desktop");
 }
