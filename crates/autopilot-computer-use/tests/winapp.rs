@@ -47,14 +47,29 @@ fn only_uia_write_actions_are_marked_write() {
 }
 
 #[test]
-fn browser_adapter_serializes_a_typed_request() {
+fn browser_adapter_serializes_a_typed_multi_action_plan() {
     let adapter = PlaywrightAdapter::new(Arc::new(NoopRuntime), "tools/browser/bridge.mjs");
     let command = adapter.build_command(&BrowserRequest {
-        action: BrowserAction::Fill { selector: "#email".into(), value: "user@example.com".into() },
+        actions: vec![
+            BrowserAction::Navigate { url: "https://example.com".into() },
+            BrowserAction::Fill { selector: "#email".into(), value: "user@example.com".into() },
+            BrowserAction::Click { selector: "button[type=submit]".into() },
+        ],
         profile_dir: Some("C:/state/browser".into()),
+        headless: true,
+        timeout_ms: Some(30_000),
     }).unwrap();
     assert_eq!(command.program, "node");
     assert_eq!(command.args[0], "tools/browser/bridge.mjs");
+    assert!(command.args[1].contains("\"action\":\"navigate\""));
     assert!(command.args[1].contains("\"action\":\"fill\""));
     assert!(!command.args[1].contains("eval"));
+    assert_eq!(command.timeout_ms, Some(30_000));
+}
+
+#[test]
+fn browser_request_rejects_empty_or_unbounded_plans() {
+    assert!(BrowserRequest { actions: vec![], profile_dir: None, headless: true, timeout_ms: None }.validate().is_err());
+    let actions = (0..65).map(|_| BrowserAction::Snapshot).collect();
+    assert!(BrowserRequest { actions, profile_dir: None, headless: true, timeout_ms: None }.validate().is_err());
 }
