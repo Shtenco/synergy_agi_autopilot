@@ -15,6 +15,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 autopilot-audit = { path = "../../../crates/autopilot-audit" }
+autopilot-delivery = { path = "../../../crates/autopilot-delivery" }
 autopilot-domain = { path = "../../../crates/autopilot-domain" }
 autopilot-engine = { path = "../../../crates/autopilot-engine" }
 autopilot-harness = { path = "../../../crates/autopilot-harness" }
@@ -22,3 +23,4 @@ autopilot-router = { path = "../../../crates/autopilot-router" }
 autopilot-runtime = { path = "../../../crates/autopilot-runtime" }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["time"] }
