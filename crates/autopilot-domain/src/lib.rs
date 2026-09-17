@@ -21,6 +21,7 @@ uuid_id!(GoalId);
 uuid_id!(TaskId);
 uuid_id!(RunId);
 uuid_id!(CorrelationId);
+uuid_id!(MissionId);
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum AgentRole {
@@ -73,6 +74,89 @@ impl GoalState {
                 | (Self::Publishing, Self::Completed)
         )
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MissionState {
+    Queued,
+    Leased,
+    Running,
+    Waiting,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl MissionState {
+    pub fn is_terminal(self) -> bool {
+        matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
+    }
+
+    pub fn can_transition_to(self, next: Self) -> bool {
+        if self.is_terminal() { return false; }
+        matches!(
+            (self, next),
+            (Self::Queued, Self::Leased)
+                | (Self::Queued, Self::Cancelled)
+                | (Self::Leased, Self::Running)
+                | (Self::Leased, Self::Queued)
+                | (Self::Leased, Self::Failed)
+                | (Self::Leased, Self::Cancelled)
+                | (Self::Running, Self::Waiting)
+                | (Self::Running, Self::Completed)
+                | (Self::Running, Self::Failed)
+                | (Self::Running, Self::Cancelled)
+                | (Self::Running, Self::Queued)
+                | (Self::Waiting, Self::Running)
+                | (Self::Waiting, Self::Queued)
+                | (Self::Waiting, Self::Failed)
+                | (Self::Waiting, Self::Cancelled)
+        )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MissionRecord {
+    pub id: MissionId,
+    pub objective: String,
+    pub project: String,
+    pub state: MissionState,
+    pub phase: String,
+    pub attempt: u32,
+    pub lease_owner: Option<String>,
+    pub lease_until: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl MissionRecord {
+    pub fn queued(objective: impl Into<String>, project: impl Into<String>) -> Self {
+        let now = Utc::now();
+        Self {
+            id: MissionId::new(), objective: objective.into(), project: project.into(),
+            state: MissionState::Queued, phase: "Queued".into(), attempt: 0,
+            lease_owner: None, lease_until: None, created_at: now, updated_at: now,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckpointRecord {
+    pub mission_id: MissionId,
+    pub phase: String,
+    pub payload_json: String,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryRecord {
+    pub project: String,
+    pub category: String,
+    pub key: String,
+    pub value_json: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
