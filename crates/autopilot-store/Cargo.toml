@@ -1,0 +1,16 @@
+[package]
+name = "autopilot-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+autopilot-audit = { path = "../autopilot-audit" }
+autopilot-domain = { path = "../autopilot-domain" }
+chrono.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true

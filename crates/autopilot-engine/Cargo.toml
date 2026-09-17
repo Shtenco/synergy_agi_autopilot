@@ -1,0 +1,21 @@
+[package]
+name = "autopilot-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+autopilot-audit = { path = "../autopilot-audit" }
+autopilot-core = { path = "../autopilot-core" }
+autopilot-domain = { path = "../autopilot-domain" }
+autopilot-fleet = { path = "../autopilot-fleet" }
+autopilot-harness = { path = "../autopilot-harness" }
+autopilot-policy = { path = "../autopilot-policy" }
+autopilot-router = { path = "../autopilot-router" }
+autopilot-runtime = { path = "../autopilot-runtime" }
+autopilot-verification = { path = "../autopilot-verification" }
+autopilot-workspace = { path = "../autopilot-workspace" }
+
+[dev-dependencies]
+tokio.workspace = true

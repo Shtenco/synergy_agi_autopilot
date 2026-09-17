@@ -1,0 +1,8 @@
+[package]
+name = "autopilot-router"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+autopilot-domain = { path = "../autopilot-domain" }
