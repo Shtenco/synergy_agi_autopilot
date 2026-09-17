@@ -38,9 +38,7 @@ impl CommandSpec {
         }
     }
     pub fn arg(mut self, arg: impl Into<String>) -> Self { self.args.push(arg.into()); self }
-    pub fn args<I, S>(mut self, args: I) -> Self where I: IntoIterator<Item = S>, S: Into<String> {
-        self.args.extend(args.into_iter().map(Into::into)); self
-    }
+    pub fn args<I, S>(mut self, args: I) -> Self where I: IntoIterator<Item = S>, S: Into<String> { self.args.extend(args.into_iter().map(Into::into)); self }
     pub fn cwd(mut self, path: impl Into<PathBuf>) -> Self { self.cwd = Some(path.into()); self }
     pub fn allow_env(mut self, key: impl Into<String>) -> Self { self.env_allowlist.insert(key.into()); self }
     pub fn timeout_ms(mut self, timeout_ms: u64) -> Self { self.timeout_ms = Some(timeout_ms); self }
@@ -120,11 +118,11 @@ impl RuntimeAdapter for NativeRuntime {
 }
 
 #[derive(Clone)]
-pub struct WslRuntime {
-    native: NativeRuntime,
-    pub distribution: Option<String>,
+pub struct WslRuntime { native: NativeRuntime, pub distribution: Option<String> }
+impl WslRuntime {
+    pub fn new(distribution: Option<String>) -> Self { Self::with_native(NativeRuntime::default(), distribution) }
+    pub fn with_native(native: NativeRuntime, distribution: Option<String>) -> Self { Self { native, distribution } }
 }
-impl WslRuntime { pub fn new(distribution: Option<String>) -> Self { Self { native: NativeRuntime::default(), distribution } } }
 #[async_trait]
 impl RuntimeAdapter for WslRuntime {
     async fn probe(&self) -> bool {
@@ -156,8 +154,9 @@ pub struct DockerRuntime {
     pub workspace_container: String,
 }
 impl DockerRuntime {
-    pub fn new(image: impl Into<String>, workspace_host: PathBuf) -> Self {
-        Self { native: NativeRuntime::default(), image: image.into(), workspace_host, workspace_container: "/workspace".into() }
+    pub fn new(image: impl Into<String>, workspace_host: PathBuf) -> Self { Self::with_native(NativeRuntime::default(), image, workspace_host) }
+    pub fn with_native(native: NativeRuntime, image: impl Into<String>, workspace_host: PathBuf) -> Self {
+        Self { native, image: image.into(), workspace_host, workspace_container: "/workspace".into() }
     }
     pub fn build_command(&self, spec: &CommandSpec) -> Result<CommandSpec, RuntimeError> {
         if self.image.trim().is_empty() { return Err(RuntimeError::Configuration("docker image is empty".into())); }
@@ -166,8 +165,7 @@ impl DockerRuntime {
             "run".into(), "--rm".into(), "--workdir".into(), self.workspace_container.clone(),
             "--mount".into(), format!(
                 "type=bind,source={},target={},readonly={}",
-                host_workspace.to_string_lossy(),
-                self.workspace_container,
+                host_workspace.to_string_lossy(), self.workspace_container,
                 spec.profile == ExecutionProfile::ReadOnlyWorkspace
             ),
             "--tmpfs".into(), "/tmp:rw,noexec,nosuid,size=268435456".into(),
