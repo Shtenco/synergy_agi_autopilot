@@ -12,8 +12,13 @@ autopilot-delivery = { path = "../../crates/autopilot-delivery" }
 autopilot-domain = { path = "../../crates/autopilot-domain" }
 autopilot-engine = { path = "../../crates/autopilot-engine" }
 autopilot-harness = { path = "../../crates/autopilot-harness" }
+autopilot-missions = { path = "../../crates/autopilot-missions" }
 autopilot-policy = { path = "../../crates/autopilot-policy" }
+autopilot-recovery = { path = "../../crates/autopilot-recovery" }
 autopilot-router = { path = "../../crates/autopilot-router" }
 autopilot-runtime = { path = "../../crates/autopilot-runtime" }
+autopilot-store = { path = "../../crates/autopilot-store" }
+chrono.workspace = true
 clap.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
