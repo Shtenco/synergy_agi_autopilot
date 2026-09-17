@@ -8,5 +8,7 @@ license.workspace = true
 autopilot-domain = { path = "../autopilot-domain" }
 autopilot-store = { path = "../autopilot-store" }
 chrono.workspace = true
+rusqlite.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
