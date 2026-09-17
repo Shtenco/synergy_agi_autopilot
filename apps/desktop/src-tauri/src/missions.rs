@@ -63,12 +63,8 @@ pub fn mission_enqueue(goal: String, project: String, state: State<'_, MissionAp
 
 #[tauri::command]
 pub fn mission_list(state: State<'_, MissionAppState>) -> Result<Vec<MissionView>, String> {
-    queue(&state)
-        .list()
-        .map_err(|error| error.to_string())?
-        .into_iter()
-        .map(|mission| Ok(to_view(&state, mission)))
-        .collect()
+    let missions = queue(&state).list().map_err(|error| error.to_string())?;
+    Ok(missions.into_iter().map(|mission| to_view(&state, mission)).collect())
 }
 
 #[tauri::command]
