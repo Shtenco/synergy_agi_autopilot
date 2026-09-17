@@ -19,8 +19,14 @@ autopilot-delivery = { path = "../../../crates/autopilot-delivery" }
 autopilot-domain = { path = "../../../crates/autopilot-domain" }
 autopilot-engine = { path = "../../../crates/autopilot-engine" }
 autopilot-harness = { path = "../../../crates/autopilot-harness" }
+autopilot-missions = { path = "../../../crates/autopilot-missions" }
+autopilot-recovery = { path = "../../../crates/autopilot-recovery" }
 autopilot-router = { path = "../../../crates/autopilot-router" }
 autopilot-runtime = { path = "../../../crates/autopilot-runtime" }
+autopilot-store = { path = "../../../crates/autopilot-store" }
+chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tauri = { version = "2", features = [] }
 tokio = { version = "1", features = ["time"] }
+uuid = "1"
