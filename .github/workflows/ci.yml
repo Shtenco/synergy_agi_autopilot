@@ -41,3 +41,18 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: TypeScript and Vite build
         run: npm run build
+
+  browser-bridge:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install bridge dependencies
+        run: npm install --no-audit --no-fund
+      - name: Syntax check
+        run: node --check bridge.mjs
