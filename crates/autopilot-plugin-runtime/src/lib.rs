@@ -568,6 +568,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn browser_run_plan_write_actions_require_approval() {
+        let mut full_registry = registry();
+        full_registry.register(
+            parse_manifest_json(include_str!("../../../plugins/browser/plugin.json")).unwrap()
+        ).unwrap();
+        let runtime = Arc::new(FakeRuntime::new(CommandResult {
+            exit_code: 0, stdout: String::new(), stderr: String::new(), duration_ms: 0,
+        }));
+        let executor = PluginExecutor::new(
+            full_registry, PolicyEngine::default(), runtime, PluginRuntimeConfig::default(),
+        );
+        let error = executor.execute(PluginCall {
+            plugin_id: "browser.local.playwright".into(),
+            capability: "browser.run_plan".into(),
+            input: json!({"actions":[{"action":"click","selector":"#buy"}]}),
+            approved: false,
+        }).await.unwrap_err();
+        assert!(matches!(error, PluginRuntimeError::ApprovalRequired(_)));
+    }
+
+    #[tokio::test]
     async fn local_mcp_parses_tools_call_result() {
         let stdout = concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n",
