@@ -18,9 +18,10 @@ use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use autopilot_verification::{VerificationCheck, VerificationPipeline};
 use autopilot_workspace::WorkspaceManager;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PluginGoalStep {
     pub role: AgentRole,
     pub plugin_id: String,
