@@ -455,6 +455,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn agent_fabric_returns_a_deterministic_lease_result() {
+        let mut full_registry = registry();
+        full_registry.register(
+            parse_manifest_json(include_str!("../../../plugins/agent-fabric/plugin.json")).unwrap()
+        ).unwrap();
+        let stdout = concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"schema\":\"synergy.worker.v1\"}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"registered\":true}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"task_id\":\"t1\",\"agent_id\":\"local\",\"epoch\":1,\"expires_epoch\":11,\"lease_root\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]}}\n"
+        );
+        let runtime = Arc::new(FakeRuntime::new(CommandResult {
+            exit_code: 0, stdout: stdout.into(), stderr: String::new(), duration_ms: 1,
+        }));
+        let executor = PluginExecutor::new(
+            full_registry, PolicyEngine::default(), runtime, PluginRuntimeConfig::default(),
+        );
+        let result = executor.execute(PluginCall {
+            plugin_id: "workers.agent.fabric".into(),
+            capability: "worker.schedule".into(),
+            input: json!({
+                "agents":[{"id":"local","role":"coder","cpu_millis":1000,"memory_mib":1024,"tools":["cargo"],"remote":false}],
+                "task":{"id":"t1","goal":"compile","required_role":"coder","required_tools":["cargo"],"cpu_millis":500,"memory_mib":512,"allow_remote":false,"epoch":1}
+            }),
+            approved: false,
+        }).await.unwrap();
+        assert_eq!(result.transport, "synergy.worker.v1+stdio");
+        assert_eq!(result.output["agent_id"], "local");
+        assert_eq!(result.output["task_id"], "t1");
+    }
+
+    #[tokio::test]
     async fn local_mcp_parses_tools_call_result() {
         let stdout = concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n",
