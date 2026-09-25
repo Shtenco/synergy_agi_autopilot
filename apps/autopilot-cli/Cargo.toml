@@ -14,6 +14,7 @@ autopilot-engine = { path = "../../crates/autopilot-engine" }
 autopilot-harness = { path = "../../crates/autopilot-harness" }
 autopilot-missions = { path = "../../crates/autopilot-missions" }
 autopilot-policy = { path = "../../crates/autopilot-policy" }
+autopilot-plugins = { path = "../../crates/autopilot-plugins" }
 autopilot-recovery = { path = "../../crates/autopilot-recovery" }
 autopilot-router = { path = "../../crates/autopilot-router" }
 autopilot-runtime = { path = "../../crates/autopilot-runtime" }
