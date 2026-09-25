@@ -6,9 +6,12 @@ license.workspace = true
 
 [dependencies]
 autopilot-domain = { path = "../autopilot-domain" }
+autopilot-automation = { path = "../autopilot-automation" }
+autopilot-secrets = { path = "../autopilot-secrets" }
 autopilot-plugins = { path = "../autopilot-plugins" }
 autopilot-policy = { path = "../autopilot-policy" }
 autopilot-runtime = { path = "../autopilot-runtime" }
+chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
