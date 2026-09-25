@@ -283,6 +283,15 @@ impl PluginExecutor {
         if call.capability == "browser.run_plan" {
             let actions = call.input.get("actions").cloned()
                 .ok_or_else(|| PluginRuntimeError::Transport("browser.run_plan requires input.actions".into()))?;
+            let has_write_action = actions.as_array().map(|items| {
+                items.iter().any(|item| matches!(
+                    item.get("action").and_then(Value::as_str),
+                    Some("click") | Some("fill")
+                ))
+            }).unwrap_or(false);
+            if has_write_action && !call.approved {
+                return Err(PluginRuntimeError::ApprovalRequired("browser.run_plan write action".into()));
+            }
             let request = json!({
                 "actions": actions,
                 "profile_dir": call.input.get("profile_dir").cloned().unwrap_or(Value::Null),
