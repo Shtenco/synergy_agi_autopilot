@@ -1,0 +1,21 @@
+{
+  "schema": "synergy.plugin.v1",
+  "id": "business.auto-company",
+  "name": "SYNERGY Auto-Company 2.0",
+  "version": "2.0.0-alpha1",
+  "kind": "business",
+  "provider": "Shtenco/synergy_ai_company#feat/auto-company-v2",
+  "capabilities": [
+    {"name":"company.status","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"company.opportunity.ingest","risk":"Low","requires_approval":false,"mapped_core_capabilities":["NetworkAccess"]},
+    {"name":"company.action.approve","risk":"High","requires_approval":true,"mapped_core_capabilities":[]},
+    {"name":"company.action.dispatch","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess"]},
+    {"name":"company.pause","risk":"High","requires_approval":true,"mapped_core_capabilities":[]}
+  ],
+  "endpoints": [
+    {"transport":"http","address":"auto-company-v2 FastAPI /v1"}
+  ],
+  "tags": ["business","revenue","risk","opportunities","company"],
+  "requires": ["business.capability.runtime"],
+  "enabled_by_default": false
+}
