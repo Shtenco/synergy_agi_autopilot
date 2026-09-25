@@ -297,10 +297,11 @@ impl PluginExecutor {
             "headless":call.input.get("headless").and_then(Value::as_bool).unwrap_or(true),
             "timeout_ms":call.input.get("timeout_ms").and_then(Value::as_u64).unwrap_or(30000)
         });
+        let request_json = request.to_string();
         let spec = self.apply_env_allowlist(
             &manifest.id,
             CommandSpec::new("node")
-                .args(["tools/browser/bridge.mjs", &request.to_string()])
+                .args(vec!["tools/browser/bridge.mjs".to_string(), request_json])
                 .profile(ExecutionProfile::Host),
         );
         let result = self.runtime.execute(spec).await
