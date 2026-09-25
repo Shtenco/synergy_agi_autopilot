@@ -251,7 +251,8 @@ impl PluginExecutor {
             Some(json!({"capability":inner,"params":params}))
         ).await?;
         let task_id = created.get("id").and_then(Value::as_str)
-            .ok_or_else(|| PluginRuntimeError::Http("business runtime returned no task id".into()))?;
+            .ok_or_else(|| PluginRuntimeError::Http("business runtime returned no task id".into()))?
+            .to_string();
         let mut state = created;
         if state.get("status").and_then(Value::as_str) == Some("needs_approval") && call.approved {
             state = self.http_json(
