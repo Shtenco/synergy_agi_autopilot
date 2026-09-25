@@ -280,6 +280,35 @@ impl PluginExecutor {
         manifest: &PluginManifest,
         call: PluginCall,
     ) -> Result<PluginResult, PluginRuntimeError> {
+        if call.capability == "browser.run_plan" {
+            let actions = call.input.get("actions").cloned()
+                .ok_or_else(|| PluginRuntimeError::Transport("browser.run_plan requires input.actions".into()))?;
+            let request = json!({
+                "actions": actions,
+                "profile_dir": call.input.get("profile_dir").cloned().unwrap_or(Value::Null),
+                "headless": call.input.get("headless").and_then(Value::as_bool).unwrap_or(true),
+                "timeout_ms": call.input.get("timeout_ms").and_then(Value::as_u64).unwrap_or(30000)
+            });
+            let request_json = request.to_string();
+            let spec = self.apply_env_allowlist(
+                &manifest.id,
+                CommandSpec::new("node")
+                    .args(vec!["tools/browser/bridge.mjs".to_string(), request_json])
+                    .profile(ExecutionProfile::Host),
+            );
+            let result = self.runtime.execute(spec).await
+                .map_err(|error| PluginRuntimeError::Transport(error.to_string()))?;
+            if result.exit_code != 0 {
+                return Err(PluginRuntimeError::Transport(format!("browser exit={} stderr={}", result.exit_code, result.stderr)));
+            }
+            let output = serde_json::from_str::<Value>(&result.stdout)
+                .map_err(|error| PluginRuntimeError::Transport(format!("invalid browser JSON: {error}")))?;
+            return Ok(PluginResult {
+                plugin_id: manifest.id.clone(), capability: call.capability,
+                transport: "node+playwright".into(), output,
+            });
+        }
+
         let action = match call.capability.as_str() {
             "browser.navigate" => json!({"action":"navigate","url":call.input.get("url").cloned().unwrap_or(Value::Null)}),
             "browser.snapshot" => json!({"action":"snapshot"}),
