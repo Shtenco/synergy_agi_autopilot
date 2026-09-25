@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,7 +10,7 @@ use autopilot_audit::{AuditStore, InMemoryAuditStore};
 use autopilot_core::{AgentExecutor, AgentOutcome, Director, DirectorConfig, GoalRequest, PlannedTask, Planner, VerificationOutcome, Verifier};
 use autopilot_delivery::{CiReport, CiState, DeliveryConfig, DeliveryEngine};
 use autopilot_domain::{AgentRole, Capability, Evidence, RiskClass};
-use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, FleetEngine, FleetEngineConfig, VerificationCommand};
+use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, FleetEngine, FleetEngineConfig, PluginGoalEngine, PluginGoalStep, VerificationCommand};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
@@ -31,6 +32,12 @@ enum Commands {
         #[arg(long)] capability: String,
         #[arg(long, default_value = "{}")] input_json: String,
         #[arg(long, default_value_t = false)] approve: bool,
+        #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
+    },
+    PluginGoal {
+        #[arg(long)] goal: String,
+        #[arg(long)] plan: PathBuf,
         #[arg(long)] workspace: Option<PathBuf>,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
     },
@@ -283,6 +290,40 @@ async fn main() -> Result<(), String> {
                 approved: approve,
             }).await.map_err(|error| error.to_string())?;
             println!("{}", serde_json::to_string_pretty(&result).map_err(|error| error.to_string())?);
+        },
+        Commands::PluginGoal { goal, plan, workspace, allow_env } => {
+            let registry = initial_plugin_registry()?;
+            let raw = fs::read_to_string(&plan).map_err(|error| format!("cannot read plan {}: {error}", plan.display()))?;
+            let steps: Vec<PluginGoalStep> = serde_json::from_str(&raw)
+                .map_err(|error| format!("invalid plugin goal plan {}: {error}", plan.display()))?;
+            if steps.is_empty() { return Err("plugin goal plan must contain at least one step".into()); }
+
+            let mut config = PluginRuntimeConfig::default();
+            config.local_workspace = workspace;
+            config.timeout_ms = Some(120_000);
+            config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
+            config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
+            config.bearer_token_env.insert("business.auto-company".into(), "SYNERGY_API_TOKEN".into());
+            for plugin_id in registry.list().map(|manifest| manifest.id.clone()).collect::<Vec<_>>() {
+                if !allow_env.is_empty() { config.env_allowlist.insert(plugin_id, allow_env.clone()); }
+            }
+
+            let executor = Arc::new(PluginExecutor::new(
+                registry,
+                PolicyEngine::default(),
+                Arc::new(NativeRuntime::default()),
+                config,
+            ));
+            let audit = Arc::new(InMemoryAuditStore::default());
+            let engine = PluginGoalEngine::new(audit.clone(), executor, steps, 0);
+            let summary = engine.run(goal).await.map_err(|error| error.to_string())?;
+            println!(
+                "final_state={:?}\nevidence={}\naudit_events={}\nblocked_by_policy={}",
+                summary.final_state,
+                summary.evidence.len(),
+                audit.list_by_correlation(summary.correlation_id).await?.len(),
+                summary.blocked_by_policy
+            );
         },
         Commands::Agent { backend, prompt, workdir, model, allow_env, timeout_ms } => {
             let mut spec = RunSpec::new(parse_backend(&backend)?, prompt, workdir);
