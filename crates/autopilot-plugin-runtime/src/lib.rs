@@ -2,11 +2,14 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use autopilot_automation::CircuitBreaker;
 use autopilot_plugins::{PluginManifest, PluginRegistry};
 use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
+use autopilot_secrets::{EnvSecretVault, SecretRef, SecretVault};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -55,6 +58,8 @@ pub enum PluginRuntimeError {
     Mcp(String),
     #[error("HTTP sidecar error: {0}")]
     Http(String),
+    #[error("plugin circuit breaker is open: {0}")]
+    CircuitOpen(String),
 }
 
 pub struct PluginExecutor {
@@ -62,6 +67,7 @@ pub struct PluginExecutor {
     policy: PolicyEngine,
     runtime: Arc<dyn RuntimeAdapter>,
     config: PluginRuntimeConfig,
+    health: Mutex<BTreeMap<String, CircuitBreaker>>,
 }
 
 impl PluginExecutor {
@@ -71,7 +77,7 @@ impl PluginExecutor {
         runtime: Arc<dyn RuntimeAdapter>,
         config: PluginRuntimeConfig,
     ) -> Self {
-        Self { registry, policy, runtime, config }
+        Self { registry, policy, runtime, config, health: Mutex::new(BTreeMap::new()) }
     }
 
     pub fn registry(&self) -> &PluginRegistry { &self.registry }
@@ -103,7 +109,18 @@ impl PluginExecutor {
             .ok_or_else(|| PluginRuntimeError::UnknownPlugin(call.plugin_id.clone()))?;
         self.authorize(manifest, &call)?;
 
-        match call.plugin_id.as_str() {
+        {
+            let mut health = self.health.lock()
+                .map_err(|_| PluginRuntimeError::Transport("plugin health lock poisoned".into()))?;
+            let breaker = health.entry(call.plugin_id.clone())
+                .or_insert_with(|| CircuitBreaker::new(3, 30));
+            if !breaker.allow(Utc::now()) {
+                return Err(PluginRuntimeError::CircuitOpen(call.plugin_id.clone()));
+            }
+        }
+
+        let plugin_id = call.plugin_id.clone();
+        let result = match call.plugin_id.as_str() {
             "computer.local.commander" => self.call_local_commander(manifest, call).await,
             "computer.remote.shttps" => self.call_remote_mcp(manifest, call).await,
             "workers.agent.fabric" => self.call_agent_fabric(manifest, call).await,
@@ -112,7 +129,16 @@ impl PluginExecutor {
             "business.auto-company" => self.call_auto_company(manifest, call).await,
             "browser.local.playwright" => self.call_browser(manifest, call).await,
             _ => Err(PluginRuntimeError::NoEndpoint(manifest.id.clone())),
+        };
+
+        if let Ok(mut health) = self.health.lock() {
+            let breaker = health.entry(plugin_id).or_insert_with(|| CircuitBreaker::new(3, 30));
+            match &result {
+                Ok(_) => breaker.record_success(),
+                Err(_) => breaker.record_failure(Utc::now()),
+            }
         }
+        result
     }
 
     async fn call_local_commander(
@@ -409,9 +435,19 @@ impl PluginExecutor {
         let method = method.to_string();
         let path = path.to_string();
         let body = body.unwrap_or(Value::Null);
-        let token_env = self.config.bearer_token_env.get(&plugin_id).cloned();
+        let bearer = match self.config.bearer_token_env.get(&plugin_id) {
+            Some(env_key) => {
+                let reference = SecretRef::new(env_key.clone())
+                    .map_err(|error| PluginRuntimeError::Http(error.to_string()))?;
+                let vault = EnvSecretVault::new([env_key.clone()]);
+                Some(vault.resolve(&reference)
+                    .map_err(|error| PluginRuntimeError::Http(error.to_string()))?
+                    .expose().to_string())
+            }
+            None => None,
+        };
         tokio::task::spawn_blocking(move || {
-            loopback_http_json(&base, &method, &path, &body, token_env.as_deref())
+            loopback_http_json(&base, &method, &path, &body, bearer.as_deref())
         }).await.map_err(|error| PluginRuntimeError::Http(error.to_string()))?
     }
 
@@ -475,7 +511,7 @@ fn loopback_http_json(
     method: &str,
     path: &str,
     body: &Value,
-    token_env: Option<&str>,
+    bearer_token: Option<&str>,
 ) -> Result<Value, PluginRuntimeError> {
     let authority = base.strip_prefix("http://")
         .ok_or_else(|| PluginRuntimeError::Http("only http:// loopback sidecars are supported".into()))?;
@@ -492,10 +528,8 @@ fn loopback_http_json(
     if !payload.is_empty() {
         headers.push_str(&format!("Content-Type: application/json\r\nContent-Length: {}\r\n", payload.as_bytes().len()));
     }
-    if let Some(env_key) = token_env {
-        if let Ok(token) = std::env::var(env_key) {
-            headers.push_str(&format!("Authorization: Bearer {token}\r\n"));
-        }
+    if let Some(token) = bearer_token {
+        headers.push_str(&format!("Authorization: Bearer {token}\r\n"));
     }
     headers.push_str("\r\n");
 
