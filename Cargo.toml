@@ -19,6 +19,8 @@ members = [
   "crates/autopilot-computer-use",
   "crates/autopilot-plugins",
   "crates/autopilot-plugin-runtime",
+  "crates/autopilot-automation",
+  "crates/autopilot-secrets",
   "apps/autopilot-cli",
 ]
 exclude = ["apps/desktop/src-tauri"]
