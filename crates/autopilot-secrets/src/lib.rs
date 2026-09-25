@@ -18,6 +18,7 @@ impl SecretRef {
     pub fn name(&self) -> &str { &self.0 }
 }
 
+#[derive(PartialEq, Eq)]
 pub struct SecretValue(String);
 
 impl SecretValue {
