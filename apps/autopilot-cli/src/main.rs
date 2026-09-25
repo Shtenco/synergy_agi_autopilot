@@ -238,7 +238,7 @@ async fn main() -> Result<(), String> {
                 include_str!("../../../plugins/agent-fabric/plugin.json"),
                 include_str!("../../../plugins/auto-company/plugin.json"),
             ] {
-                registry.register(parse_manifest_json(raw)?).map_err(|error| error.to_string())?;
+                registry.register(parse_manifest_json(raw).map_err(|error| error.to_string())?).map_err(|error| error.to_string())?;
             }
             registry.validate_dependencies().map_err(|error| error.to_string())?;
             for plugin in registry.list() {
