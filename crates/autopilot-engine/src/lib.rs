@@ -13,10 +13,149 @@ use autopilot_domain::{AgentRole, AuditEvent, Capability, CorrelationId, Evidenc
 use autopilot_fleet::{FleetScheduler, FleetTask};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::{PolicyDecision, PolicyEngine};
+use autopilot_plugin_runtime::{PluginCall, PluginExecutor};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use autopilot_verification::{VerificationCheck, VerificationPipeline};
 use autopilot_workspace::WorkspaceManager;
+use serde_json::{json, Value};
+
+#[derive(Clone, Debug)]
+pub struct PluginGoalStep {
+    pub role: AgentRole,
+    pub plugin_id: String,
+    pub capability: String,
+    pub input: Value,
+    pub approved: bool,
+    pub risk: RiskClass,
+}
+
+impl PluginGoalStep {
+    pub fn new(
+        role: AgentRole,
+        plugin_id: impl Into<String>,
+        capability: impl Into<String>,
+        input: Value,
+        risk: RiskClass,
+    ) -> Self {
+        Self {
+            role,
+            plugin_id: plugin_id.into(),
+            capability: capability.into(),
+            input,
+            approved: false,
+            risk,
+        }
+    }
+
+    pub fn approved(mut self, approved: bool) -> Self {
+        self.approved = approved;
+        self
+    }
+}
+
+struct PluginPlan {
+    steps: Vec<PluginGoalStep>,
+}
+
+#[async_trait]
+impl Planner for PluginPlan {
+    async fn plan(&self, _request: &GoalRequest) -> Result<Vec<PlannedTask>, String> {
+        self.steps.iter().map(|step| {
+            let envelope = json!({
+                "plugin_id": step.plugin_id,
+                "capability": step.capability,
+                "input": step.input,
+                "approved": step.approved,
+            });
+            Ok(PlannedTask {
+                role: step.role.clone(),
+                objective: serde_json::to_string(&envelope).map_err(|error| error.to_string())?,
+                capability: Capability::Custom(format!("plugin:{}/{}", step.plugin_id, step.capability)),
+                risk: step.risk,
+            })
+        }).collect()
+    }
+}
+
+struct PluginExecutorBridge {
+    executor: Arc<PluginExecutor>,
+}
+
+#[async_trait]
+impl AgentExecutor for PluginExecutorBridge {
+    async fn execute(&self, task: &PlannedTask) -> Result<AgentOutcome, String> {
+        let value: Value = serde_json::from_str(&task.objective).map_err(|error| error.to_string())?;
+        let call = PluginCall {
+            plugin_id: value.get("plugin_id").and_then(Value::as_str).ok_or("plugin_id missing")?.to_string(),
+            capability: value.get("capability").and_then(Value::as_str).ok_or("capability missing")?.to_string(),
+            input: value.get("input").cloned().unwrap_or(Value::Null),
+            approved: value.get("approved").and_then(Value::as_bool).unwrap_or(false),
+        };
+        let result = self.executor.execute(call).await.map_err(|error| error.to_string())?;
+        Ok(AgentOutcome {
+            objective: task.objective.clone(),
+            success: true,
+            summary: serde_json::to_string(&result).map_err(|error| error.to_string())?,
+        })
+    }
+}
+
+struct PluginEvidenceVerifier;
+
+#[async_trait]
+impl Verifier for PluginEvidenceVerifier {
+    async fn verify(&self, _request: &GoalRequest, outcomes: &[AgentOutcome]) -> Result<VerificationOutcome, String> {
+        let passed = !outcomes.is_empty() && outcomes.iter().all(|outcome| outcome.success);
+        let evidence = outcomes.iter().enumerate().map(|(index, outcome)| {
+            if outcome.success {
+                Evidence::passed("plugin-execution", format!("step {} completed with structured plugin result", index + 1))
+            } else {
+                Evidence::failed("plugin-execution", format!("step {} failed", index + 1))
+            }
+        }).collect();
+        Ok(VerificationOutcome { passed, evidence })
+    }
+}
+
+pub struct PluginGoalEngine {
+    director: Director,
+}
+
+impl PluginGoalEngine {
+    pub fn new(
+        audit: Arc<dyn AuditStore>,
+        executor: Arc<PluginExecutor>,
+        steps: Vec<PluginGoalStep>,
+        max_repairs: usize,
+    ) -> Self {
+        let required_capabilities = steps.iter()
+            .map(|step| (Capability::Custom(format!("plugin:{}/{}", step.plugin_id, step.capability)), step.risk))
+            .collect::<Vec<_>>();
+        let planner = Arc::new(PluginPlan { steps });
+        let bridge = Arc::new(PluginExecutorBridge { executor });
+        let verifier = Arc::new(PluginEvidenceVerifier);
+        let mut rules = Vec::new();
+        for (capability, risk) in required_capabilities {
+            rules.push(autopilot_policy::PolicyRule::for_capability_at_least_risk(
+                capability, risk, PolicyDecision::Allow,
+            ));
+        }
+        let director = Director::new(
+            DirectorConfig { max_repairs },
+            PolicyEngine::new(rules),
+            audit,
+            planner,
+            bridge,
+            verifier,
+        );
+        Self { director }
+    }
+
+    pub async fn run(&self, goal: impl Into<String>) -> Result<GoalRunSummary, DirectorError> {
+        self.director.run_goal(GoalRequest::new(goal)).await
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerificationCommand {
