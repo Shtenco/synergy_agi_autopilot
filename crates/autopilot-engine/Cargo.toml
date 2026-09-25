@@ -16,6 +16,7 @@ autopilot-router = { path = "../autopilot-router" }
 autopilot-runtime = { path = "../autopilot-runtime" }
 autopilot-verification = { path = "../autopilot-verification" }
 autopilot-workspace = { path = "../autopilot-workspace" }
+tokio.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
