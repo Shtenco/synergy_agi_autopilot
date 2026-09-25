@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use autopilot_audit::AuditStore;
@@ -23,6 +23,8 @@ use serde_json::{json, Value};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PluginGoalStep {
+    #[serde(default)]
+    pub id: Option<String>,
     pub role: AgentRole,
     pub plugin_id: String,
     pub capability: String,
@@ -40,6 +42,7 @@ impl PluginGoalStep {
         risk: RiskClass,
     ) -> Self {
         Self {
+            id: None,
             role,
             plugin_id: plugin_id.into(),
             capability: capability.into(),
@@ -62,8 +65,10 @@ struct PluginPlan {
 #[async_trait]
 impl Planner for PluginPlan {
     async fn plan(&self, _request: &GoalRequest) -> Result<Vec<PlannedTask>, String> {
-        self.steps.iter().map(|step| {
+        self.steps.iter().enumerate().map(|(step_index, step)| {
             let envelope = json!({
+                "step_index": step_index,
+                "step_id": step.id,
                 "plugin_id": step.plugin_id,
                 "capability": step.capability,
                 "input": step.input,
@@ -81,19 +86,69 @@ impl Planner for PluginPlan {
 
 struct PluginExecutorBridge {
     executor: Arc<PluginExecutor>,
+    context: Arc<Mutex<Vec<Value>>>,
+}
+
+fn resolve_plugin_refs(value: Value, context: &[Value]) -> Result<Value, String> {
+    match value {
+        Value::Object(mut map) if map.len() == 1 && map.contains_key("$ref") => {
+            let reference = map.remove("$ref").and_then(|v| v.as_str().map(str::to_string))
+                .ok_or_else(|| "$ref must be a string".to_string())?;
+            let mut parts = reference.split('.');
+            if parts.next() != Some("steps") {
+                return Err(format!("unsupported reference root: {reference}"));
+            }
+            let index: usize = parts.next().ok_or_else(|| format!("missing step index in {reference}"))?
+                .parse().map_err(|_| format!("invalid step index in {reference}"))?;
+            let mut current = context.get(index).cloned()
+                .ok_or_else(|| format!("reference points to unavailable step {index}"))?;
+            for segment in parts {
+                current = match current {
+                    Value::Object(ref object) => object.get(segment).cloned()
+                        .ok_or_else(|| format!("missing object field {segment} in {reference}"))?,
+                    Value::Array(ref array) => {
+                        let array_index: usize = segment.parse()
+                            .map_err(|_| format!("array segment {segment} is not an index in {reference}"))?;
+                        array.get(array_index).cloned()
+                            .ok_or_else(|| format!("array index {array_index} out of range in {reference}"))?
+                    }
+                    _ => return Err(format!("cannot descend through {segment} in {reference}")),
+                };
+            }
+            Ok(current)
+        }
+        Value::Object(map) => {
+            let mut resolved = serde_json::Map::new();
+            for (key, item) in map {
+                resolved.insert(key, resolve_plugin_refs(item, context)?);
+            }
+            Ok(Value::Object(resolved))
+        }
+        Value::Array(items) => items.into_iter()
+            .map(|item| resolve_plugin_refs(item, context))
+            .collect::<Result<Vec<_>, _>>()
+            .map(Value::Array),
+        other => Ok(other),
+    }
 }
 
 #[async_trait]
 impl AgentExecutor for PluginExecutorBridge {
     async fn execute(&self, task: &PlannedTask) -> Result<AgentOutcome, String> {
         let value: Value = serde_json::from_str(&task.objective).map_err(|error| error.to_string())?;
+        let input = {
+            let context = self.context.lock().map_err(|_| "plugin context lock poisoned".to_string())?;
+            resolve_plugin_refs(value.get("input").cloned().unwrap_or(Value::Null), &context)?
+        };
         let call = PluginCall {
             plugin_id: value.get("plugin_id").and_then(Value::as_str).ok_or("plugin_id missing")?.to_string(),
             capability: value.get("capability").and_then(Value::as_str).ok_or("capability missing")?.to_string(),
-            input: value.get("input").cloned().unwrap_or(Value::Null),
+            input,
             approved: value.get("approved").and_then(Value::as_bool).unwrap_or(false),
         };
         let result = self.executor.execute(call).await.map_err(|error| error.to_string())?;
+        let serialized = serde_json::to_value(&result).map_err(|error| error.to_string())?;
+        self.context.lock().map_err(|_| "plugin context lock poisoned".to_string())?.push(serialized);
         Ok(AgentOutcome {
             objective: task.objective.clone(),
             success: true,
@@ -134,7 +189,7 @@ impl PluginGoalEngine {
             .map(|step| (Capability::Custom(format!("plugin:{}/{}", step.plugin_id, step.capability)), step.risk))
             .collect::<Vec<_>>();
         let planner = Arc::new(PluginPlan { steps });
-        let bridge = Arc::new(PluginExecutorBridge { executor });
+        let bridge = Arc::new(PluginExecutorBridge { executor, context: Arc::new(Mutex::new(Vec::new())) });
         let verifier = Arc::new(PluginEvidenceVerifier);
         let mut rules = Vec::new();
         for (capability, risk) in required_capabilities {
