@@ -97,17 +97,17 @@ result + audit trail
 - [x] create `synergy.plugin.v1`;
 - [x] add Plugin Registry crate;
 - [x] declare first six provider manifests;
-- [ ] make plugin manifests discoverable from CLI/Desktop;
-- [ ] add policy evaluation for plugin capabilities.
+- [x] make plugin manifests discoverable from CLI; Desktop surface pending;
+- [x] add policy + approval evaluation before plugin dispatch.
 
 ### Gate B — executable adapters
 
-- [ ] local Node Commander MCP adapter;
-- [ ] Remote MCP/SHTTPS adapter;
-- [ ] Agent Fabric worker adapter;
-- [ ] NEXUS compatibility sidecar;
-- [ ] Auto-Company adapter;
-- [ ] business runtime process lifecycle.
+- [x] local Node Commander MCP adapter;
+- [x] Remote MCP/SHTTPS adapter;
+- [x] Agent Fabric worker adapter + synergy.worker.v1 bridge;
+- [x] NEXUS compatibility sidecar;
+- [x] Auto-Company adapter;
+- [x] business runtime local sidecar launcher;
 
 ### Gate C — universal automation
 
@@ -121,7 +121,9 @@ result + audit trail
 
 ### Gate D — first universal vertical slice
 
-One human goal must execute across multiple capability domains:
+Implementation is present as `open-autopilot e2e-sales`.
+
+It executes across multiple capability domains with deterministic step-to-step dataflow references and a final fail-closed evidence verifier:
 
 ```text
 find/ingest lead
@@ -134,3 +136,26 @@ find/ingest lead
 ```
 
 Completion requires deterministic evidence for every external side effect.
+
+
+## M5 verification status
+
+Implementation status: **complete enough for physical qualification**.
+
+The current GitHub Actions jobs are not executing on runners: the API reports `runner_id=0` and `steps=[]` for all jobs. These are infrastructure failures rather than observed code-test failures.
+
+A physical Windows run previously reached Rust dependency resolution, but the connected node disconnected before final results were captured.
+
+Reproducible local qualification:
+
+```powershell
+.\scripts\verify-m5.ps1
+```
+
+Development stack:
+
+```powershell
+.\scripts\run-m5-stack.ps1 -BlockchainDir C:\src\synergy_ai_blockchain -AutoCompanyDir C:\src\synergy_ai_company
+```
+
+M5 remains draft until the physical qualification gate is captured.
