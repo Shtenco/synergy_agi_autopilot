@@ -201,6 +201,7 @@ mod tests {
             include_str!("../../../plugins/nexus/plugin.json"),
             include_str!("../../../plugins/agent-fabric/plugin.json"),
             include_str!("../../../plugins/auto-company/plugin.json"),
+            include_str!("../../../plugins/browser/plugin.json"),
         ] {
             parse_manifest_json(raw).unwrap();
         }
