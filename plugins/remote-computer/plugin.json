@@ -1,0 +1,20 @@
+{
+  "schema": "synergy.plugin.v1",
+  "id": "computer.remote.shttps",
+  "name": "SYNERGY Remote MCP",
+  "version": "1.0.0",
+  "kind": "remote_mcp",
+  "provider": "Shtenco/synergy_shttps",
+  "capabilities": [
+    {"name":"computer.remote.list_dir","risk":"Low","requires_approval":false,"mapped_core_capabilities":["NetworkAccess","ReadWorkspace"]},
+    {"name":"computer.remote.read_file","risk":"Low","requires_approval":false,"mapped_core_capabilities":["NetworkAccess","ReadWorkspace"]},
+    {"name":"computer.remote.run","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess","ExecuteProcess"]}
+  ],
+  "endpoints": [
+    {"transport":"mcp_stdio","address":"synergy-mcp-gateway"},
+    {"transport":"shttps_stcp","address":"synergy.remote.mcp.v1"}
+  ],
+  "tags": ["computer","remote","mcp","shttps","stcp"],
+  "requires": [],
+  "enabled_by_default": false
+}
