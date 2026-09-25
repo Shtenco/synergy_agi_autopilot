@@ -13,6 +13,7 @@ use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, Fle
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
+use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
 
@@ -25,6 +26,14 @@ enum Commands {
     Demo { #[arg(long)] goal: String },
     Backends,
     Plugins,
+    PluginCall {
+        #[arg(long)] plugin: String,
+        #[arg(long)] capability: String,
+        #[arg(long, default_value = "{}")] input_json: String,
+        #[arg(long, default_value_t = false)] approve: bool,
+        #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
+    },
     Agent {
         #[arg(long)] backend: String,
         #[arg(long)] prompt: String,
@@ -68,6 +77,23 @@ enum Commands {
         #[arg(long, default_value_t = 12)] ci_poll_attempts: usize,
         #[arg(long, default_value_t = 5_000)] ci_poll_interval_ms: u64,
     },
+}
+
+fn initial_plugin_registry() -> Result<PluginRegistry, String> {
+    let mut registry = PluginRegistry::default();
+    for raw in [
+        include_str!("../../../plugins/local-computer/plugin.json"),
+        include_str!("../../../plugins/remote-computer/plugin.json"),
+        include_str!("../../../plugins/business-runtime/plugin.json"),
+        include_str!("../../../plugins/nexus/plugin.json"),
+        include_str!("../../../plugins/agent-fabric/plugin.json"),
+        include_str!("../../../plugins/auto-company/plugin.json"),
+    ] {
+        let manifest = parse_manifest_json(raw).map_err(|error| error.to_string())?;
+        registry.register(manifest).map_err(|error| error.to_string())?;
+    }
+    registry.validate_dependencies().map_err(|error| error.to_string())?;
+    Ok(registry)
 }
 
 fn parse_backend(value: &str) -> Result<BackendKind, String> {
@@ -229,24 +255,34 @@ async fn main() -> Result<(), String> {
         }
         Commands::Backends => for backend in BackendRegistry::builtin_kinds() { println!("{backend:?}"); },
         Commands::Plugins => {
-            let mut registry = PluginRegistry::default();
-            for raw in [
-                include_str!("../../../plugins/local-computer/plugin.json"),
-                include_str!("../../../plugins/remote-computer/plugin.json"),
-                include_str!("../../../plugins/business-runtime/plugin.json"),
-                include_str!("../../../plugins/nexus/plugin.json"),
-                include_str!("../../../plugins/agent-fabric/plugin.json"),
-                include_str!("../../../plugins/auto-company/plugin.json"),
-            ] {
-                registry.register(parse_manifest_json(raw).map_err(|error| error.to_string())?).map_err(|error| error.to_string())?;
-            }
-            registry.validate_dependencies().map_err(|error| error.to_string())?;
+            let registry = initial_plugin_registry()?;
             for plugin in registry.list() {
                 println!("{}\t{}\t{}\t{:?}", plugin.id, plugin.version, plugin.name, plugin.kind);
                 for capability in &plugin.capabilities {
                     println!("  {}\t{:?}\tapproval={}", capability.name, capability.risk, capability.requires_approval);
                 }
             }
+        },
+        Commands::PluginCall { plugin, capability, input_json, approve, workspace, allow_env } => {
+            let registry = initial_plugin_registry()?;
+            let input = serde_json::from_str(&input_json).map_err(|error| format!("invalid --input-json: {error}"))?;
+            let mut config = PluginRuntimeConfig::default();
+            config.local_workspace = workspace;
+            config.timeout_ms = Some(120_000);
+            if !allow_env.is_empty() { config.env_allowlist.insert(plugin.clone(), allow_env); }
+            let executor = PluginExecutor::new(
+                registry,
+                PolicyEngine::default(),
+                Arc::new(NativeRuntime::default()),
+                config,
+            );
+            let result = executor.execute(PluginCall {
+                plugin_id: plugin,
+                capability,
+                input,
+                approved: approve,
+            }).await.map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&result).map_err(|error| error.to_string())?);
         },
         Commands::Agent { backend, prompt, workdir, model, allow_env, timeout_ms } => {
             let mut spec = RunSpec::new(parse_backend(&backend)?, prompt, workdir);
