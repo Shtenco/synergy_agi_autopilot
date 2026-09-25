@@ -110,6 +110,7 @@ impl PluginExecutor {
             "intelligence.nexus" => self.call_nexus(manifest, call).await,
             "business.capability.runtime" => self.call_business_runtime(manifest, call).await,
             "business.auto-company" => self.call_auto_company(manifest, call).await,
+            "browser.local.playwright" => self.call_browser(manifest, call).await,
             _ => Err(PluginRuntimeError::NoEndpoint(manifest.id.clone())),
         }
     }
@@ -239,6 +240,7 @@ impl PluginExecutor {
             "business.cfo.analyze" => "cfo.analyze_budget",
             "business.smm.plan" => "smm.content_plan",
             "business.sales.plan" => "sales.qualify",
+            "business.verify.evidence" => "verifier.check_evidence",
             "business.external.publish" => call.input.get("capability").and_then(Value::as_str)
                 .ok_or_else(|| PluginRuntimeError::Http("external publish requires input.capability".into()))?,
             _ => return Err(PluginRuntimeError::UnknownCapability {
@@ -270,6 +272,47 @@ impl PluginExecutor {
         Ok(PluginResult {
             plugin_id: manifest.id.clone(), capability: call.capability,
             transport: "http-loopback+synergy.capability.v1".into(), output: state,
+        })
+    }
+
+    async fn call_browser(
+        &self,
+        manifest: &PluginManifest,
+        call: PluginCall,
+    ) -> Result<PluginResult, PluginRuntimeError> {
+        let action = match call.capability.as_str() {
+            "browser.navigate" => json!({"action":"navigate","url":call.input.get("url").cloned().unwrap_or(Value::Null)}),
+            "browser.snapshot" => json!({"action":"snapshot"}),
+            "browser.click" => json!({"action":"click","selector":call.input.get("selector").cloned().unwrap_or(Value::Null)}),
+            "browser.fill" => json!({"action":"fill","selector":call.input.get("selector").cloned().unwrap_or(Value::Null),"value":call.input.get("value").cloned().unwrap_or(Value::Null)}),
+            "browser.wait" => json!({"action":"wait_for","selector":call.input.get("selector").cloned().unwrap_or(Value::Null),"timeout_ms":call.input.get("timeout_ms").cloned().unwrap_or(Value::Null)}),
+            "browser.screenshot" => json!({"action":"screenshot","output":call.input.get("output").cloned().unwrap_or(Value::Null)}),
+            _ => return Err(PluginRuntimeError::UnknownCapability {
+                plugin: manifest.id.clone(), capability: call.capability,
+            }),
+        };
+        let request = json!({
+            "actions":[action],
+            "profile_dir":call.input.get("profile_dir").cloned().unwrap_or(Value::Null),
+            "headless":call.input.get("headless").and_then(Value::as_bool).unwrap_or(true),
+            "timeout_ms":call.input.get("timeout_ms").and_then(Value::as_u64).unwrap_or(30000)
+        });
+        let spec = self.apply_env_allowlist(
+            &manifest.id,
+            CommandSpec::new("node")
+                .args(["tools/browser/bridge.mjs", &request.to_string()])
+                .profile(ExecutionProfile::Host),
+        );
+        let result = self.runtime.execute(spec).await
+            .map_err(|error| PluginRuntimeError::Transport(error.to_string()))?;
+        if result.exit_code != 0 {
+            return Err(PluginRuntimeError::Transport(format!("browser exit={} stderr={}", result.exit_code, result.stderr)));
+        }
+        let output = serde_json::from_str::<Value>(&result.stdout)
+            .map_err(|error| PluginRuntimeError::Transport(format!("invalid browser JSON: {error}")))?;
+        Ok(PluginResult {
+            plugin_id: manifest.id.clone(), capability: call.capability,
+            transport: "node+playwright".into(), output,
         })
     }
 
