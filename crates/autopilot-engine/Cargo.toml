@@ -18,6 +18,7 @@ autopilot-runtime = { path = "../autopilot-runtime" }
 autopilot-verification = { path = "../autopilot-verification" }
 autopilot-workspace = { path = "../autopilot-workspace" }
 tokio.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
