@@ -5,7 +5,11 @@
     "capability": "memory.search",
     "input": {
       "query": "target customer profile, prior outreach, offers, objections",
-      "namespaces": ["sales", "crm", "company"],
+      "namespaces": [
+        "sales",
+        "crm",
+        "company"
+      ],
       "limit": 10
     },
     "approved": false,
@@ -19,12 +23,18 @@
       "title": "M5 sample lead",
       "source": "autopilot-e2e",
       "description": "Prepare a qualified lead and sales package through the universal capability graph.",
-      "expected_revenue_usd": 0.0,
-      "estimated_cost_usd": 0.0,
-      "probability": 0.0,
+      "expected_revenue_usd": 0,
+      "estimated_cost_usd": 0,
+      "probability": 0,
       "hours": 0.5,
-      "evidence": ["M5 universal execution fabric"],
-      "tags": ["m5", "e2e", "sales"]
+      "evidence": [
+        "M5 universal execution fabric"
+      ],
+      "tags": [
+        "m5",
+        "e2e",
+        "sales"
+      ]
     },
     "approved": false,
     "risk": "Low"
@@ -34,18 +44,8 @@
     "plugin_id": "business.capability.runtime",
     "capability": "business.sales.plan",
     "input": {
-      "lead": {
-        "name": "M5 sample lead",
-        "source": "autopilot-e2e",
-        "messages": [],
-        "objections": []
-      },
-      "product": {
-        "name": "SYNERGY AI AUTOPILOT",
-        "pain_points": ["manual workflows", "fragmented tools", "slow execution"],
-        "usp": ["one goal", "many agents", "local and remote automation"],
-        "cta": "schedule a product walkthrough"
-      }
+      "message": "Interested in reducing manual work across sales, content, CRM and operations. Wants a measurable demo and implementation plan.",
+      "current_score": 35
     },
     "approved": false,
     "risk": "Low"
@@ -55,9 +55,15 @@
     "plugin_id": "business.capability.runtime",
     "capability": "business.smm.plan",
     "input": {
-      "goal": "prepare a concise cross-platform content plan supporting the sales conversation",
-      "audience": "business owners who need automation",
-      "platforms": ["telegram", "vk", "instagram"]
+      "product": "SYNERGY AI AUTOPILOT",
+      "audience": "business owners and teams with fragmented manual workflows",
+      "objective": "qualified sales conversations",
+      "days": 7,
+      "platforms": [
+        "telegram",
+        "vk",
+        "instagram"
+      ]
     },
     "approved": false,
     "risk": "Low"
@@ -85,7 +91,10 @@
           "role": "sales-worker",
           "cpu_millis": 1000,
           "memory_mib": 1024,
-          "tools": ["sales", "smm"],
+          "tools": [
+            "sales",
+            "smm"
+          ],
           "remote": false
         },
         {
@@ -93,7 +102,10 @@
           "role": "sales-worker",
           "cpu_millis": 2000,
           "memory_mib": 2048,
-          "tools": ["sales", "smm"],
+          "tools": [
+            "sales",
+            "smm"
+          ],
           "remote": true
         }
       ],
@@ -101,7 +113,9 @@
         "id": "m5-sales-package",
         "goal": "verify and package the prepared sales assets",
         "required_role": "sales-worker",
-        "required_tools": ["sales"],
+        "required_tools": [
+          "sales"
+        ],
         "cpu_millis": 500,
         "memory_mib": 512,
         "allow_remote": true,
