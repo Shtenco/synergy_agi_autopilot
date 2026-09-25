@@ -127,7 +127,7 @@ impl NativeRuntime {
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
             duration_ms: started.elapsed().as_millis(),
         })
-    }}
+    }
 }
 
 #[async_trait]
