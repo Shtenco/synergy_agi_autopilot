@@ -12,6 +12,7 @@ use autopilot_domain::{AgentRole, Capability, Evidence, RiskClass};
 use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, FleetEngine, FleetEngineConfig, VerificationCommand};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
+use autopilot_plugins::{parse_manifest_json, PluginRegistry};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
 
@@ -23,6 +24,7 @@ struct Cli { #[command(subcommand)] command: Commands }
 enum Commands {
     Demo { #[arg(long)] goal: String },
     Backends,
+    Plugins,
     Agent {
         #[arg(long)] backend: String,
         #[arg(long)] prompt: String,
@@ -226,6 +228,26 @@ async fn main() -> Result<(), String> {
             println!("final_state={:?}\naudit_events={}", summary.final_state, audit.list_by_correlation(summary.correlation_id).await?.len());
         }
         Commands::Backends => for backend in BackendRegistry::builtin_kinds() { println!("{backend:?}"); },
+        Commands::Plugins => {
+            let mut registry = PluginRegistry::default();
+            for raw in [
+                include_str!("../../../plugins/local-computer/plugin.json"),
+                include_str!("../../../plugins/remote-computer/plugin.json"),
+                include_str!("../../../plugins/business-runtime/plugin.json"),
+                include_str!("../../../plugins/nexus/plugin.json"),
+                include_str!("../../../plugins/agent-fabric/plugin.json"),
+                include_str!("../../../plugins/auto-company/plugin.json"),
+            ] {
+                registry.register(parse_manifest_json(raw)?).map_err(|error| error.to_string())?;
+            }
+            registry.validate_dependencies().map_err(|error| error.to_string())?;
+            for plugin in registry.list() {
+                println!("{}\t{}\t{}\t{:?}", plugin.id, plugin.version, plugin.name, plugin.kind);
+                for capability in &plugin.capabilities {
+                    println!("  {}\t{:?}\tapproval={}", capability.name, capability.risk, capability.requires_approval);
+                }
+            }
+        },
         Commands::Agent { backend, prompt, workdir, model, allow_env, timeout_ms } => {
             let mut spec = RunSpec::new(parse_backend(&backend)?, prompt, workdir);
             if let Some(model) = model { spec = spec.model(model); }
