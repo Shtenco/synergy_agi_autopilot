@@ -6,6 +6,7 @@
   "kind": "browser",
   "provider": "crates/autopilot-computer-use + tools/browser/bridge.mjs",
   "capabilities": [
+    {"name":"browser.run_plan","risk":"Medium","requires_approval":false,"mapped_core_capabilities":["NetworkAccess","ComputerUse"]},
     {"name":"browser.navigate","risk":"Medium","requires_approval":false,"mapped_core_capabilities":["NetworkAccess","ComputerUse"]},
     {"name":"browser.snapshot","risk":"Low","requires_approval":false,"mapped_core_capabilities":["ComputerUse"]},
     {"name":"browser.click","risk":"High","requires_approval":true,"mapped_core_capabilities":["ComputerUse"]},
