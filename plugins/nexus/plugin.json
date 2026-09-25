@@ -1,0 +1,20 @@
+{
+  "schema": "synergy.plugin.v1",
+  "id": "intelligence.nexus",
+  "name": "SYNERGY NEXUS Intelligence and Memory",
+  "version": "1.0.0",
+  "kind": "model",
+  "provider": "Shtenco/synergy_agi_nexus",
+  "capabilities": [
+    {"name":"intelligence.infer","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"intelligence.reason","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"memory.search","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"memory.upsert","risk":"Medium","requires_approval":false,"mapped_core_capabilities":[]}
+  ],
+  "endpoints": [
+    {"transport":"compatibility_sidecar","address":"http://127.0.0.1:8130"}
+  ],
+  "tags": ["intelligence","memory","nexus","model"],
+  "requires": [],
+  "enabled_by_default": false
+}
