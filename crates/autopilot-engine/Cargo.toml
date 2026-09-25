@@ -12,11 +12,13 @@ autopilot-domain = { path = "../autopilot-domain" }
 autopilot-fleet = { path = "../autopilot-fleet" }
 autopilot-harness = { path = "../autopilot-harness" }
 autopilot-policy = { path = "../autopilot-policy" }
+autopilot-plugin-runtime = { path = "../autopilot-plugin-runtime" }
 autopilot-router = { path = "../autopilot-router" }
 autopilot-runtime = { path = "../autopilot-runtime" }
 autopilot-verification = { path = "../autopilot-verification" }
 autopilot-workspace = { path = "../autopilot-workspace" }
 tokio.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
