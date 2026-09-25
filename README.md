@@ -1,3 +1,19 @@
+# SYNERGY AI AUTOPILOT v1 integration
+
+This branch is the convergence line for the universal SYNERGY Autopilot: trusted Rust goal-to-result control plane + plugin fabric + bounded Python business sidecars + local/remote computer workers + NEXUS/Agent Fabric/Auto-Company providers.
+
+Current integration status:
+- OPEN AUTOPILOT Rust control plane retained as the authority boundary;
+- PR #5 business runtime imported under `sidecars/business-runtime/`;
+- universal `synergy.plugin.v1` contract and `autopilot-plugins` registry added;
+- initial manifests: Local Commander, Remote MCP, Business Runtime, NEXUS, Agent Fabric, Auto-Company;
+- CLI command `open-autopilot plugins` added for capability discovery;
+- external side effects remain policy/approval scoped.
+
+See `docs/SYNERGY_AI_AUTOPILOT_V1_INTEGRATION.md` and `docs/architecture/plugin-fabric-v1.md`.
+
+---
+
 # OPEN AUTOPILOT
 
 **OPEN AUTOPILOT** is a Windows-first, hybrid-local-first autonomous AI engineering workstation.
