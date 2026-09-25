@@ -269,6 +269,22 @@ impl PluginExecutor {
                 &format!("/v1/tasks/{task_id}/execute"), Some(json!({}))
             ).await?;
         }
+        let status = state.get("status").and_then(Value::as_str).unwrap_or("");
+        if status != "succeeded" {
+            return Err(PluginRuntimeError::Http(format!(
+                "business capability {} did not succeed: status={} state={}",
+                call.capability, status, state
+            )));
+        }
+        if call.capability == "business.verify.evidence" {
+            let result_json = state.get("result_json").and_then(Value::as_str)
+                .ok_or_else(|| PluginRuntimeError::Http("verifier returned no result_json".into()))?;
+            let verified: Value = serde_json::from_str(result_json)
+                .map_err(|error| PluginRuntimeError::Http(format!("invalid verifier result_json: {error}")))?;
+            if verified.get("verified").and_then(Value::as_bool) != Some(true) {
+                return Err(PluginRuntimeError::Http(format!("evidence verifier failed: {verified}")));
+            }
+        }
         Ok(PluginResult {
             plugin_id: manifest.id.clone(), capability: call.capability,
             transport: "http-loopback+synergy.capability.v1".into(), output: state,
