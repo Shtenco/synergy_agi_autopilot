@@ -1,0 +1,18 @@
+{
+  "schema": "synergy.plugin.v1",
+  "id": "computer.local.commander",
+  "name": "SYNERGY Node Commander",
+  "version": "1.0.0",
+  "kind": "mcp",
+  "provider": "Shtenco/synergy_ai_blockchain",
+  "capabilities": [
+    {"name":"computer.read_file","risk":"Low","requires_approval":false,"mapped_core_capabilities":["ReadWorkspace"]},
+    {"name":"computer.write_file","risk":"Medium","requires_approval":false,"mapped_core_capabilities":["WriteWorkspace"]},
+    {"name":"computer.run_command","risk":"High","requires_approval":true,"mapped_core_capabilities":["ExecuteProcess"]},
+    {"name":"computer.system_info","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]}
+  ],
+  "endpoints": [{"transport":"mcp_stdio","address":"synergy-node mcp --stdio"}],
+  "tags": ["computer","local","mcp","worker"],
+  "requires": [],
+  "enabled_by_default": false
+}
