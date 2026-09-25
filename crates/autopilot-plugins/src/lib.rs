@@ -6,6 +6,13 @@ use thiserror::Error;
 
 pub const PLUGIN_SCHEMA_V1: &str = "synergy.plugin.v1";
 
+pub fn parse_manifest_json(input: &str) -> Result<PluginManifest, PluginError> {
+    let manifest: PluginManifest =
+        serde_json::from_str(input).map_err(|error| PluginError::InvalidManifest(error.to_string()))?;
+    manifest.validate()?;
+    Ok(manifest)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PluginKind {
@@ -182,6 +189,17 @@ mod tests {
             tags: BTreeSet::new(),
             requires: BTreeSet::new(),
             enabled_by_default: false,
+        }
+    }
+
+    #[test]
+    fn parses_repository_manifests() {
+        for raw in [
+            include_str!("../../../plugins/local-computer/plugin.json"),
+            include_str!("../../../plugins/remote-computer/plugin.json"),
+            include_str!("../../../plugins/business-runtime/plugin.json"),
+        ] {
+            parse_manifest_json(raw).unwrap();
         }
     }
 
