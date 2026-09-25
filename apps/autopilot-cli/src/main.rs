@@ -41,6 +41,15 @@ enum Commands {
         #[arg(long)] workspace: Option<PathBuf>,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
     },
+    E2eSales {
+        #[arg(long)] lead_url: String,
+        #[arg(long)] lead_title: String,
+        #[arg(long)] product: String,
+        #[arg(long, default_value = "business owners")] audience: String,
+        #[arg(long)] workspace: PathBuf,
+        #[arg(long, default_value_t = false)] use_remote: bool,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
+    },
     Agent {
         #[arg(long)] backend: String,
         #[arg(long)] prompt: String,
@@ -102,6 +111,162 @@ fn initial_plugin_registry() -> Result<PluginRegistry, String> {
     }
     registry.validate_dependencies().map_err(|error| error.to_string())?;
     Ok(registry)
+}
+
+fn e2e_sales_steps(
+    lead_url: &str,
+    lead_title: &str,
+    product: &str,
+    audience: &str,
+    use_remote: bool,
+) -> Vec<PluginGoalStep> {
+    let mut steps = vec![
+        PluginGoalStep {
+            id: Some("memory".into()),
+            role: AgentRole::Custom("Memory".into()),
+            plugin_id: "intelligence.nexus".into(),
+            capability: "memory.search".into(),
+            input: serde_json::json!({"query":format!("{lead_title} {product}"),"limit":10}),
+            approved: false,
+            risk: RiskClass::Low,
+        },
+        PluginGoalStep {
+            id: Some("browser".into()),
+            role: AgentRole::Custom("Researcher".into()),
+            plugin_id: "browser.local.playwright".into(),
+            capability: "browser.run_plan".into(),
+            input: serde_json::json!({
+                "actions":[
+                    {"action":"navigate","url":lead_url},
+                    {"action":"snapshot"}
+                ],
+                "headless":true,
+                "timeout_ms":30000
+            }),
+            approved: false,
+            risk: RiskClass::Medium,
+        },
+        PluginGoalStep {
+            id: Some("opportunity".into()),
+            role: AgentRole::Custom("Revenue".into()),
+            plugin_id: "business.auto-company".into(),
+            capability: "company.opportunity.ingest".into(),
+            input: serde_json::json!({
+                "title":lead_title,
+                "source":"autopilot-browser",
+                "description":{"$ref":"steps.1.output.results.1.text"},
+                "url":lead_url,
+                "expected_revenue_usd":0.0,
+                "estimated_cost_usd":0.0,
+                "probability":0.0,
+                "hours":0.0,
+                "evidence":["public browser snapshot"],
+                "tags":["autopilot","e2e-sales"]
+            }),
+            approved: false,
+            risk: RiskClass::Low,
+        },
+        PluginGoalStep {
+            id: Some("sales".into()),
+            role: AgentRole::Custom("Sales".into()),
+            plugin_id: "business.capability.runtime".into(),
+            capability: "business.sales.plan".into(),
+            input: serde_json::json!({
+                "message":{"$ref":"steps.1.output.results.1.text"},
+                "current_score":0
+            }),
+            approved: false,
+            risk: RiskClass::Low,
+        },
+        PluginGoalStep {
+            id: Some("smm".into()),
+            role: AgentRole::Custom("SMM".into()),
+            plugin_id: "business.capability.runtime".into(),
+            capability: "business.smm.plan".into(),
+            input: serde_json::json!({
+                "product":product,
+                "audience":audience,
+                "objective":"qualified leads",
+                "days":7,
+                "platforms":["telegram","vk","instagram"]
+            }),
+            approved: false,
+            risk: RiskClass::Low,
+        },
+        PluginGoalStep {
+            id: Some("artifact".into()),
+            role: AgentRole::Custom("Operator".into()),
+            plugin_id: "computer.local.commander".into(),
+            capability: "computer.write_file".into(),
+            input: serde_json::json!({
+                "path":"autopilot/e2e-sales/lead_snapshot.txt",
+                "content":{"$ref":"steps.1.output.results.1.text"},
+                "mode":"rewrite"
+            }),
+            approved: false,
+            risk: RiskClass::Medium,
+        },
+        PluginGoalStep {
+            id: Some("worker".into()),
+            role: AgentRole::Custom("Scheduler".into()),
+            plugin_id: "workers.agent.fabric".into(),
+            capability: "worker.schedule".into(),
+            input: serde_json::json!({
+                "agents":[
+                    {"id":"local-sales-worker","role":"reviewer","cpu_millis":1000,"memory_mib":1024,"tools":["read_file"],"remote":false},
+                    {"id":"remote-sales-worker","role":"reviewer","cpu_millis":2000,"memory_mib":2048,"tools":["read_file"],"remote":true}
+                ],
+                "task":{
+                    "id":"e2e-sales-review",
+                    "goal":"Review the generated lead research artifact and prepare a verified handoff",
+                    "required_role":"reviewer",
+                    "required_tools":["read_file"],
+                    "cpu_millis":500,
+                    "memory_mib":512,
+                    "allow_remote":use_remote,
+                    "epoch":1
+                }
+            }),
+            approved: false,
+            risk: RiskClass::Medium,
+        },
+    ];
+
+    if use_remote {
+        steps.push(PluginGoalStep {
+            id: Some("remote".into()),
+            role: AgentRole::Custom("RemoteOperator".into()),
+            plugin_id: "computer.remote.shttps".into(),
+            capability: "computer.remote.list_dir".into(),
+            input: serde_json::json!({"path":"."}),
+            approved: false,
+            risk: RiskClass::Low,
+        });
+    }
+
+    let mut evidence = serde_json::Map::new();
+    evidence.insert("memory".into(), serde_json::json!({"$ref":"steps.0.output"}));
+    evidence.insert("browser".into(), serde_json::json!({"$ref":"steps.1.output"}));
+    evidence.insert("opportunity".into(), serde_json::json!({"$ref":"steps.2.output"}));
+    evidence.insert("sales".into(), serde_json::json!({"$ref":"steps.3.output"}));
+    evidence.insert("smm".into(), serde_json::json!({"$ref":"steps.4.output"}));
+    evidence.insert("artifact".into(), serde_json::json!({"$ref":"steps.5.output"}));
+    evidence.insert("worker".into(), serde_json::json!({"$ref":"steps.6.output"}));
+    let mut required = vec!["memory","browser","opportunity","sales","smm","artifact","worker"];
+    if use_remote {
+        evidence.insert("remote".into(), serde_json::json!({"$ref":"steps.7.output"}));
+        required.push("remote");
+    }
+    steps.push(PluginGoalStep {
+        id: Some("verify".into()),
+        role: AgentRole::Custom("Verifier".into()),
+        plugin_id: "business.capability.runtime".into(),
+        capability: "business.verify.evidence".into(),
+        input: serde_json::json!({"required":required,"evidence":evidence}),
+        approved: false,
+        risk: RiskClass::Low,
+    });
+    steps
 }
 
 fn parse_backend(value: &str) -> Result<BackendKind, String> {
@@ -325,6 +490,40 @@ async fn main() -> Result<(), String> {
                 audit.list_by_correlation(summary.correlation_id).await?.len(),
                 summary.blocked_by_policy
             );
+        },
+        Commands::E2eSales { lead_url, lead_title, product, audience, workspace, use_remote, allow_env } => {
+            let registry = initial_plugin_registry()?;
+            let steps = e2e_sales_steps(&lead_url, &lead_title, &product, &audience, use_remote);
+            let mut config = PluginRuntimeConfig::default();
+            config.local_workspace = Some(workspace);
+            config.timeout_ms = Some(120_000);
+            config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
+            config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
+            config.bearer_token_env.insert("business.auto-company".into(), "SYNERGY_API_TOKEN".into());
+            for plugin_id in registry.list().map(|manifest| manifest.id.clone()).collect::<Vec<_>>() {
+                if !allow_env.is_empty() { config.env_allowlist.insert(plugin_id, allow_env.clone()); }
+            }
+            let executor = Arc::new(PluginExecutor::new(
+                registry,
+                PolicyEngine::default(),
+                Arc::new(NativeRuntime::default()),
+                config,
+            ));
+            let audit = Arc::new(InMemoryAuditStore::default());
+            let engine = PluginGoalEngine::new(audit.clone(), executor, steps, 0);
+            let summary = engine.run(format!("Find and prepare sales opportunity: {lead_title} for {product}")).await
+                .map_err(|error| error.to_string())?;
+            println!(
+                "SYNERGY AI AUTOPILOT E2E SALES\nfinal_state={:?}\nevidence={}\naudit_events={}\nblocked_by_policy={}\nremote={}",
+                summary.final_state,
+                summary.evidence.len(),
+                audit.list_by_correlation(summary.correlation_id).await?.len(),
+                summary.blocked_by_policy,
+                use_remote
+            );
+            if summary.final_state != autopilot_domain::GoalState::Completed {
+                return Err("E2E sales vertical slice did not complete".into());
+            }
         },
         Commands::Agent { backend, prompt, workdir, model, allow_env, timeout_ms } => {
             let mut spec = RunSpec::new(parse_backend(&backend)?, prompt, workdir);
