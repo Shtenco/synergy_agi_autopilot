@@ -1,4 +1,6 @@
 use std::collections::BTreeMap;
+use std::io::{Read, Write};
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -31,6 +33,7 @@ pub struct PluginResult {
 pub struct PluginRuntimeConfig {
     pub local_workspace: Option<PathBuf>,
     pub env_allowlist: BTreeMap<String, Vec<String>>,
+    pub bearer_token_env: BTreeMap<String, String>,
     pub timeout_ms: Option<u64>,
 }
 
@@ -50,6 +53,8 @@ pub enum PluginRuntimeError {
     Transport(String),
     #[error("invalid MCP response: {0}")]
     Mcp(String),
+    #[error("HTTP sidecar error: {0}")]
+    Http(String),
 }
 
 pub struct PluginExecutor {
@@ -101,6 +106,10 @@ impl PluginExecutor {
         match call.plugin_id.as_str() {
             "computer.local.commander" => self.call_local_commander(manifest, call).await,
             "computer.remote.shttps" => self.call_remote_mcp(manifest, call).await,
+            "workers.agent.fabric" => self.call_agent_fabric(manifest, call).await,
+            "intelligence.nexus" => self.call_nexus(manifest, call).await,
+            "business.capability.runtime" => self.call_business_runtime(manifest, call).await,
+            "business.auto-company" => self.call_auto_company(manifest, call).await,
             _ => Err(PluginRuntimeError::NoEndpoint(manifest.id.clone())),
         }
     }
@@ -161,6 +170,152 @@ impl PluginExecutor {
         })
     }
 
+    async fn call_agent_fabric(
+        &self,
+        manifest: &PluginManifest,
+        call: PluginCall,
+    ) -> Result<PluginResult, PluginRuntimeError> {
+        if call.capability != "worker.schedule" && call.capability != "worker.lease" {
+            return Err(PluginRuntimeError::UnknownCapability {
+                plugin: manifest.id.clone(), capability: call.capability,
+            });
+        }
+        let agents = call.input.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+        let task = call.input.get("task").cloned().unwrap_or_else(|| call.input.clone());
+        let mut lines = vec![json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}).to_string()];
+        let mut request_id = 2u64;
+        for agent in agents {
+            lines.push(json!({"jsonrpc":"2.0","id":request_id,"method":"agent/register","params":agent}).to_string());
+            request_id += 1;
+        }
+        lines.push(json!({"jsonrpc":"2.0","id":request_id,"method":"task/lease","params":task}).to_string());
+        let mut spec = CommandSpec::new("agent-fabric-stdio").profile(ExecutionProfile::Host);
+        spec = self.apply_env_allowlist(&manifest.id, spec);
+        spec = spec.stdin_data(format!("{}\n", lines.join("\n")));
+        let result = self.runtime.execute(spec).await
+            .map_err(|error| PluginRuntimeError::Transport(error.to_string()))?;
+        if result.exit_code != 0 {
+            return Err(PluginRuntimeError::Transport(format!("exit={} stderr={}", result.exit_code, result.stderr)));
+        }
+        let mut selected = None;
+        for line in result.stdout.lines() {
+            let Ok(value) = serde_json::from_str::<Value>(line) else { continue };
+            if value.get("id") == Some(&Value::from(request_id)) { selected = Some(value); }
+        }
+        let selected = selected.ok_or_else(|| PluginRuntimeError::Transport("missing task/lease response".into()))?;
+        if let Some(error) = selected.get("error") { return Err(PluginRuntimeError::Transport(error.to_string())); }
+        Ok(PluginResult {
+            plugin_id: manifest.id.clone(),
+            capability: call.capability,
+            transport: "synergy.worker.v1+stdio".into(),
+            output: selected.get("result").cloned().unwrap_or(Value::Null),
+        })
+    }
+
+    async fn call_nexus(
+        &self,
+        manifest: &PluginManifest,
+        call: PluginCall,
+    ) -> Result<PluginResult, PluginRuntimeError> {
+        let (method, path) = match call.capability.as_str() {
+            "memory.search" => ("POST", "/v1/memory/search"),
+            "memory.upsert" => ("POST", "/v1/memory/upsert"),
+            "intelligence.infer" | "intelligence.reason" => ("POST", "/v1/infer"),
+            _ => return Err(PluginRuntimeError::UnknownCapability {
+                plugin: manifest.id.clone(), capability: call.capability,
+            }),
+        };
+        let output = self.http_json(&manifest.id, "http://127.0.0.1:8130", method, path, Some(call.input.clone())).await?;
+        Ok(PluginResult { plugin_id: manifest.id.clone(), capability: call.capability, transport: "http-loopback".into(), output })
+    }
+
+    async fn call_business_runtime(
+        &self,
+        manifest: &PluginManifest,
+        call: PluginCall,
+    ) -> Result<PluginResult, PluginRuntimeError> {
+        let inner = match call.capability.as_str() {
+            "business.ceo.plan" => "ceo.plan",
+            "business.cfo.analyze" => "cfo.analyze_budget",
+            "business.smm.plan" => "smm.content_plan",
+            "business.sales.plan" => "sales.qualify",
+            "business.external.publish" => call.input.get("capability").and_then(Value::as_str)
+                .ok_or_else(|| PluginRuntimeError::Http("external publish requires input.capability".into()))?,
+            _ => return Err(PluginRuntimeError::UnknownCapability {
+                plugin: manifest.id.clone(), capability: call.capability,
+            }),
+        };
+        let params = call.input.get("params").cloned().unwrap_or_else(|| call.input.clone());
+        let created = self.http_json(
+            &manifest.id, "http://127.0.0.1:8120", "POST", "/v1/tasks",
+            Some(json!({"capability":inner,"params":params}))
+        ).await?;
+        let task_id = created.get("id").and_then(Value::as_str)
+            .ok_or_else(|| PluginRuntimeError::Http("business runtime returned no task id".into()))?;
+        let mut state = created;
+        if state.get("status").and_then(Value::as_str) == Some("needs_approval") && call.approved {
+            state = self.http_json(
+                &manifest.id, "http://127.0.0.1:8120", "POST",
+                &format!("/v1/tasks/{task_id}/approve"),
+                Some(json!({"actor":"synergy-ai-autopilot"}))
+            ).await?;
+        }
+        if matches!(state.get("status").and_then(Value::as_str), Some("ready") | Some("approved")) {
+            state = self.http_json(
+                &manifest.id, "http://127.0.0.1:8120", "POST",
+                &format!("/v1/tasks/{task_id}/execute"), Some(json!({}))
+            ).await?;
+        }
+        Ok(PluginResult {
+            plugin_id: manifest.id.clone(), capability: call.capability,
+            transport: "http-loopback+synergy.capability.v1".into(), output: state,
+        })
+    }
+
+    async fn call_auto_company(
+        &self,
+        manifest: &PluginManifest,
+        call: PluginCall,
+    ) -> Result<PluginResult, PluginRuntimeError> {
+        let (method, path, body) = match call.capability.as_str() {
+            "company.status" => ("GET".to_string(), "/v1/status".to_string(), None),
+            "company.opportunity.ingest" => ("POST".to_string(), "/v1/leads".to_string(), Some(call.input.clone())),
+            "company.pause" => ("POST".to_string(), "/v1/pause".to_string(), Some(json!({"actor":"synergy-ai-autopilot","reason":"plugin call"}))),
+            "company.action.approve" => {
+                let id = call.input.get("action_id").and_then(Value::as_str).ok_or_else(|| PluginRuntimeError::Http("action_id required".into()))?;
+                ("POST".to_string(), format!("/v1/actions/{id}/approve"), Some(json!({"actor":"synergy-ai-autopilot","reason":"approved via Autopilot"})))
+            }
+            "company.action.dispatch" => {
+                let id = call.input.get("action_id").and_then(Value::as_str).ok_or_else(|| PluginRuntimeError::Http("action_id required".into()))?;
+                ("POST".to_string(), format!("/v1/actions/{id}/dispatch"), Some(json!({})))
+            }
+            _ => return Err(PluginRuntimeError::UnknownCapability {
+                plugin: manifest.id.clone(), capability: call.capability,
+            }),
+        };
+        let output = self.http_json(&manifest.id, "http://127.0.0.1:8140", &method, &path, body).await?;
+        Ok(PluginResult { plugin_id: manifest.id.clone(), capability: call.capability, transport: "http-loopback".into(), output })
+    }
+
+    async fn http_json(
+        &self,
+        plugin_id: &str,
+        base: &str,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<Value, PluginRuntimeError> {
+        let plugin_id = plugin_id.to_string();
+        let base = base.to_string();
+        let method = method.to_string();
+        let path = path.to_string();
+        let body = body.unwrap_or(Value::Null);
+        let token_env = self.config.bearer_token_env.get(&plugin_id).cloned();
+        tokio::task::spawn_blocking(move || {
+            loopback_http_json(&base, &method, &path, &body, token_env.as_deref())
+        }).await.map_err(|error| PluginRuntimeError::Http(error.to_string()))?
+    }
+
     fn apply_env_allowlist(&self, plugin_id: &str, mut spec: CommandSpec) -> CommandSpec {
         if let Some(keys) = self.config.env_allowlist.get(plugin_id) {
             for key in keys { spec = spec.allow_env(key.clone()); }
@@ -214,6 +369,54 @@ impl PluginExecutor {
         }
         Ok(result)
     }
+}
+
+fn loopback_http_json(
+    base: &str,
+    method: &str,
+    path: &str,
+    body: &Value,
+    token_env: Option<&str>,
+) -> Result<Value, PluginRuntimeError> {
+    let authority = base.strip_prefix("http://")
+        .ok_or_else(|| PluginRuntimeError::Http("only http:// loopback sidecars are supported".into()))?;
+    let (host, port) = authority.rsplit_once(':')
+        .ok_or_else(|| PluginRuntimeError::Http("sidecar URL must include port".into()))?;
+    if !matches!(host, "127.0.0.1" | "localhost" | "::1") {
+        return Err(PluginRuntimeError::Http("sidecar endpoint must be loopback".into()));
+    }
+    let port: u16 = port.parse().map_err(|_| PluginRuntimeError::Http("invalid port".into()))?;
+    let payload = if method == "GET" { String::new() } else { serde_json::to_string(body).map_err(|e| PluginRuntimeError::Http(e.to_string()))? };
+    let mut headers = format!(
+        "{method} {path} HTTP/1.1\r\nHost: {host}:{port}\r\nAccept: application/json\r\nConnection: close\r\n"
+    );
+    if !payload.is_empty() {
+        headers.push_str(&format!("Content-Type: application/json\r\nContent-Length: {}\r\n", payload.as_bytes().len()));
+    }
+    if let Some(env_key) = token_env {
+        if let Ok(token) = std::env::var(env_key) {
+            headers.push_str(&format!("Authorization: Bearer {token}\r\n"));
+        }
+    }
+    headers.push_str("\r\n");
+
+    let mut stream = TcpStream::connect((host, port))
+        .map_err(|e| PluginRuntimeError::Http(format!("connect {host}:{port}: {e}")))?;
+    stream.write_all(headers.as_bytes()).map_err(|e| PluginRuntimeError::Http(e.to_string()))?;
+    if !payload.is_empty() { stream.write_all(payload.as_bytes()).map_err(|e| PluginRuntimeError::Http(e.to_string()))?; }
+    let mut raw = String::new();
+    stream.read_to_string(&mut raw).map_err(|e| PluginRuntimeError::Http(e.to_string()))?;
+    let (head, body) = raw.split_once("\r\n\r\n")
+        .ok_or_else(|| PluginRuntimeError::Http("invalid HTTP response".into()))?;
+    let status = head.lines().next().and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|v| v.parse::<u16>().ok()).unwrap_or(0);
+    let parsed = if body.trim().is_empty() { json!({}) } else {
+        serde_json::from_str(body).map_err(|e| PluginRuntimeError::Http(format!("invalid JSON response: {e}; body={body}")))?
+    };
+    if !(200..300).contains(&status) {
+        return Err(PluginRuntimeError::Http(format!("status={status} body={parsed}")));
+    }
+    Ok(parsed)
 }
 
 #[cfg(test)]
