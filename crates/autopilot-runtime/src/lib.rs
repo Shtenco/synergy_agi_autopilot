@@ -1,9 +1,11 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use thiserror::Error;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::sync::Notify;
 
@@ -26,6 +28,8 @@ pub struct CommandSpec {
     pub args: Vec<String>,
     pub cwd: Option<PathBuf>,
     pub env_allowlist: BTreeSet<String>,
+    pub env_overrides: BTreeMap<String, String>,
+    pub stdin_data: Option<String>,
     pub timeout_ms: Option<u64>,
     pub profile: ExecutionProfile,
 }
@@ -34,13 +38,18 @@ impl CommandSpec {
     pub fn new(program: impl Into<String>) -> Self {
         Self {
             program: program.into(), args: Vec::new(), cwd: None,
-            env_allowlist: BTreeSet::new(), timeout_ms: None, profile: ExecutionProfile::Host,
+            env_allowlist: BTreeSet::new(), env_overrides: BTreeMap::new(), stdin_data: None,
+            timeout_ms: None, profile: ExecutionProfile::Host,
         }
     }
     pub fn arg(mut self, arg: impl Into<String>) -> Self { self.args.push(arg.into()); self }
     pub fn args<I, S>(mut self, args: I) -> Self where I: IntoIterator<Item = S>, S: Into<String> { self.args.extend(args.into_iter().map(Into::into)); self }
     pub fn cwd(mut self, path: impl Into<PathBuf>) -> Self { self.cwd = Some(path.into()); self }
     pub fn allow_env(mut self, key: impl Into<String>) -> Self { self.env_allowlist.insert(key.into()); self }
+    pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env_overrides.insert(key.into(), value.into()); self
+    }
+    pub fn stdin_data(mut self, data: impl Into<String>) -> Self { self.stdin_data = Some(data.into()); self }
     pub fn timeout_ms(mut self, timeout_ms: u64) -> Self { self.timeout_ms = Some(timeout_ms); self }
     pub fn profile(mut self, profile: ExecutionProfile) -> Self { self.profile = profile; self }
 }
@@ -76,16 +85,32 @@ impl Default for NativeRuntime { fn default() -> Self { Self { cancel_signal: Ar
 impl NativeRuntime {
     async fn execute_host(&self, spec: CommandSpec) -> Result<CommandResult, RuntimeError> {
         let started = Instant::now();
+        let timeout_ms = spec.timeout_ms;
+        let stdin_data = spec.stdin_data.clone();
         let mut command = Command::new(&spec.program);
         command.args(&spec.args);
         command.kill_on_drop(true);
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        if stdin_data.is_some() { command.stdin(Stdio::piped()); }
         if let Some(cwd) = spec.cwd { command.current_dir(cwd); }
         command.env_clear();
         for key in BASE_ENV_KEYS.iter().copied().chain(spec.env_allowlist.iter().map(String::as_str)) {
             if let Ok(value) = std::env::var(key) { command.env(key, value); }
         }
-        let mut output_future = Box::pin(command.output());
-        let output = match spec.timeout_ms {
+        for (key, value) in spec.env_overrides { command.env(key, value); }
+
+        let mut child = command.spawn()?;
+        if let Some(data) = stdin_data {
+            let mut stdin = child.stdin.take().ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::BrokenPipe, "child stdin unavailable")
+            })?;
+            stdin.write_all(data.as_bytes()).await?;
+            stdin.shutdown().await?;
+        }
+
+        let mut output_future = Box::pin(child.wait_with_output());
+        let output = match timeout_ms {
             Some(timeout_ms) => tokio::select! {
                 result = &mut output_future => result?,
                 _ = self.cancel_signal.notified() => return Err(RuntimeError::Cancelled),
@@ -102,7 +127,7 @@ impl NativeRuntime {
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
             duration_ms: started.elapsed().as_millis(),
         })
-    }
+    }}
 }
 
 #[async_trait]
@@ -141,6 +166,8 @@ impl RuntimeAdapter for WslRuntime {
         let mut command = CommandSpec::new("wsl.exe").args(args).profile(ExecutionProfile::Host);
         if let Some(timeout) = spec.timeout_ms { command = command.timeout_ms(timeout); }
         for key in spec.env_allowlist { command = command.allow_env(key); }
+        for (key, value) in spec.env_overrides { command = command.env(key, value); }
+        if let Some(data) = spec.stdin_data { command = command.stdin_data(data); }
         self.native.execute_host(command).await
     }
     async fn cancel(&self) -> Result<(), RuntimeError> { self.native.cancel().await }
@@ -172,11 +199,13 @@ impl DockerRuntime {
         ];
         if spec.profile == ExecutionProfile::ReadOnlyWorkspace { args.extend(["--network".into(), "none".into()]); }
         for key in &spec.env_allowlist { args.extend(["--env".into(), key.clone()]); }
+        for (key, value) in &spec.env_overrides { args.extend(["--env".into(), format!("{key}={value}")]); }
         args.push(self.image.clone());
         args.push(spec.program.clone());
         args.extend(spec.args.clone());
         let mut command = CommandSpec::new("docker").args(args).profile(ExecutionProfile::Host);
         for key in &spec.env_allowlist { command = command.allow_env(key.clone()); }
+        if let Some(data) = &spec.stdin_data { command = command.stdin_data(data.clone()); }
         if let Some(timeout) = spec.timeout_ms { command = command.timeout_ms(timeout); }
         Ok(command)
     }
