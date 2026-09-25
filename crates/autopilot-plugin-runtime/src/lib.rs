@@ -294,7 +294,7 @@ impl PluginExecutor {
                 plugin: manifest.id.clone(), capability: call.capability,
             }),
         };
-        let output = self.http_json(&manifest.id, "http://127.0.0.1:8140", &method, &path, body).await?;
+        let output = self.http_json(&manifest.id, "http://127.0.0.1:8788", &method, &path, body).await?;
         Ok(PluginResult { plugin_id: manifest.id.clone(), capability: call.capability, transport: "http-loopback".into(), output })
     }
 
