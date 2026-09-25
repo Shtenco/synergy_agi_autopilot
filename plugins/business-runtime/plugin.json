@@ -1,0 +1,19 @@
+{
+  "schema": "synergy.plugin.v1",
+  "id": "business.capability.runtime",
+  "name": "SYNERGY Business Capability Runtime",
+  "version": "1.0.0",
+  "kind": "business",
+  "provider": "sidecars/business-runtime",
+  "capabilities": [
+    {"name":"business.ceo.plan","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"business.cfo.analyze","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"business.smm.plan","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"business.sales.plan","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"business.external.publish","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess"]}
+  ],
+  "endpoints": [{"transport":"http","address":"http://127.0.0.1:8120"}],
+  "tags": ["business","smm","sales","cfo","ceo"],
+  "requires": [],
+  "enabled_by_default": false
+}
