@@ -56,3 +56,22 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Syntax check
         run: node --check bridge.mjs
+
+  python-sidecars:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install business runtime
+        run: python -m pip install -e "./sidecars/business-runtime[test]"
+      - name: Run business runtime tests
+        run: python -m pytest sidecars/business-runtime/tests -q
+      - name: Install NEXUS compatibility bridge
+        run: python -m pip install -e ./sidecars/nexus-bridge
+      - name: Validate NEXUS bridge import
+        run: python -c "from nexus_bridge.app import app; assert app.title.startswith('SYNERGY NEXUS')"
+      - name: Compile Python sidecars
+        run: python -m compileall -q sidecars/business-runtime/src sidecars/nexus-bridge/src
