@@ -95,6 +95,7 @@ fn initial_plugin_registry() -> Result<PluginRegistry, String> {
         include_str!("../../../plugins/nexus/plugin.json"),
         include_str!("../../../plugins/agent-fabric/plugin.json"),
         include_str!("../../../plugins/auto-company/plugin.json"),
+        include_str!("../../../plugins/browser/plugin.json"),
     ] {
         let manifest = parse_manifest_json(raw).map_err(|error| error.to_string())?;
         registry.register(manifest).map_err(|error| error.to_string())?;
