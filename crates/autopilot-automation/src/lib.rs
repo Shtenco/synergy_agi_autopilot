@@ -75,14 +75,14 @@ impl AutomationRegistry {
             if !spec.enabled { return false; }
             match &spec.trigger {
                 Trigger::Once { at } => {
-                    *at <= now && self.last_fired.get(&spec.id).is_none()
+                    at <= &now && self.last_fired.get(&spec.id).is_none()
                 }
                 Trigger::Interval { every_seconds, start_at } => {
                     if *every_seconds == 0 { return false; }
-                    if start_at.is_some_and(|start| start > now) { return false; }
+                    if start_at.as_ref().is_some_and(|start| start > &now) { return false; }
                     match self.last_fired.get(&spec.id) {
                         None => true,
-                        Some(last) => *last + Duration::seconds(*every_seconds as i64) <= now,
+                        Some(last) => last.clone() + Duration::seconds(*every_seconds as i64) <= now,
                     }
                 }
                 Trigger::Manual | Trigger::Webhook { .. } | Trigger::Event { .. } => false,
@@ -123,8 +123,8 @@ impl CircuitBreaker {
             HealthState::Closed => true,
             HealthState::HalfOpen => true,
             HealthState::Open => {
-                let ready = self.opened_at.is_some_and(|opened| {
-                    opened + Duration::seconds(self.recovery_seconds as i64) <= now
+                let ready = self.opened_at.as_ref().is_some_and(|opened| {
+                    opened.clone() + Duration::seconds(self.recovery_seconds as i64) <= now
                 });
                 if ready {
                     self.state = HealthState::HalfOpen;
