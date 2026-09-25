@@ -675,3 +675,33 @@ impl FleetEngine {
         })
     }
 }
+
+
+#[cfg(test)]
+mod plugin_dataflow_tests {
+    use super::*;
+
+    #[test]
+    fn resolves_nested_step_references() {
+        let context = vec![
+            json!({"output":{"items":[{"text":"lead-a"}]}}),
+            json!({"output":{"score":42}}),
+        ];
+        let value = json!({
+            "message":{"$ref":"steps.0.output.items.0.text"},
+            "score":{"$ref":"steps.1.output.score"}
+        });
+        let resolved = resolve_plugin_refs(value, &context).expect("resolve refs");
+        assert_eq!(resolved["message"], "lead-a");
+        assert_eq!(resolved["score"], 42);
+    }
+
+    #[test]
+    fn rejects_forward_or_missing_references() {
+        let error = resolve_plugin_refs(
+            json!({"$ref":"steps.3.output"}),
+            &[json!({"output":{"ok":true}})],
+        ).expect_err("missing step must fail");
+        assert!(error.contains("unavailable step"));
+    }
+}
