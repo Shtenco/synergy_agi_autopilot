@@ -72,6 +72,8 @@ pub enum PluginRuntimeError {
     Budget(String),
     #[error("plugin input contract validation failed: {0}")]
     InvalidInput(String),
+    #[error("plugin output contract validation failed: {0}")]
+    InvalidOutput(String),
 }
 
 pub struct PluginExecutor {
@@ -197,6 +199,22 @@ impl PluginExecutor {
             }
             _ if manifest.adapter.is_some() => self.call_generated_adapter(manifest, call).await,
             _ => Err(PluginRuntimeError::NoEndpoint(manifest.id.clone())),
+        };
+
+        let result = match result {
+            Ok(result) => {
+                if let Some(contract) = manifest.output_contract(&result.capability) {
+                    let errors = JsonContractValidator::validate(contract, &result.output);
+                    if !errors.is_empty() {
+                        Err(PluginRuntimeError::InvalidOutput(errors.join("; ")))
+                    } else {
+                        Ok(result)
+                    }
+                } else {
+                    Ok(result)
+                }
+            }
+            Err(error) => Err(error),
         };
 
         if let Ok(mut health) = self.health.lock() {
