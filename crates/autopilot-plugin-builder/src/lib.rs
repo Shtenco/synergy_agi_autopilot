@@ -348,7 +348,7 @@ impl SandboxQualifier {
         }
         let spec = CommandSpec::new(program.to_string())
             .args(args.to_vec())
-            .profile(ExecutionProfile::ReadOnly);
+            .profile(ExecutionProfile::ReadOnlyWorkspace);
         match self.runtime.execute(spec).await {
             Ok(result) if result.exit_code == 0 => QualificationCheck {
                 name: "sandbox_probe".into(),
