@@ -9,6 +9,7 @@ autopilot-domain = { path = "../autopilot-domain" }
 autopilot-automation = { path = "../autopilot-automation" }
 autopilot-control-plane = { path = "../autopilot-control-plane" }
 autopilot-secrets = { path = "../autopilot-secrets" }
+autopilot-semantic-planner = { path = "../autopilot-semantic-planner" }
 autopilot-plugins = { path = "../autopilot-plugins" }
 autopilot-policy = { path = "../autopilot-policy" }
 autopilot-runtime = { path = "../autopilot-runtime" }
