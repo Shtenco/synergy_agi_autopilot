@@ -86,12 +86,18 @@ impl Planner for PluginPlan {
     }
 }
 
-struct PluginExecutorBridge {
-    executor: Arc<PluginExecutor>,
-    context: Arc<Mutex<Vec<Value>>>,
+#[derive(Clone, Debug)]
+struct PluginStepContext {
+    id: Option<String>,
+    value: Value,
 }
 
-fn resolve_plugin_refs(value: Value, context: &[Value]) -> Result<Value, String> {
+struct PluginExecutorBridge {
+    executor: Arc<PluginExecutor>,
+    context: Arc<Mutex<Vec<PluginStepContext>>>,
+}
+
+fn resolve_plugin_refs(value: Value, context: &[PluginStepContext]) -> Result<Value, String> {
     match value {
         Value::Object(mut map) if map.len() == 1 && map.contains_key("$ref") => {
             let reference = map.remove("$ref").and_then(|v| v.as_str().map(str::to_string))
@@ -102,7 +108,7 @@ fn resolve_plugin_refs(value: Value, context: &[Value]) -> Result<Value, String>
             }
             let index: usize = parts.next().ok_or_else(|| format!("missing step index in {reference}"))?
                 .parse().map_err(|_| format!("invalid step index in {reference}"))?;
-            let mut current = context.get(index).cloned()
+            let mut current = context.get(index).map(|entry| entry.value.clone())
                 .ok_or_else(|| format!("reference points to unavailable step {index}"))?;
             for segment in parts {
                 current = match current {
@@ -134,7 +140,7 @@ fn resolve_plugin_refs(value: Value, context: &[Value]) -> Result<Value, String>
     }
 }
 
-fn resolve_semantic_plugin_input(value: Value, context: &[Value]) -> Result<Value, String> {
+fn resolve_semantic_plugin_input(value: Value, context: &[PluginStepContext]) -> Result<Value, String> {
     let Value::Object(mut map) = value else { return Ok(value) };
     let Some(contract) = map.remove("$semantic_contract") else {
         return Ok(Value::Object(map));
@@ -159,12 +165,9 @@ fn resolve_semantic_plugin_input(value: Value, context: &[Value]) -> Result<Valu
             .ok_or_else(|| "typed binding missing from_path".to_string())?;
         let to_field = binding.get("to_field").and_then(Value::as_str)
             .ok_or_else(|| "typed binding missing to_field".to_string())?;
-        let index = from_step.strip_prefix("step-")
-            .and_then(|value| value.parse::<usize>().ok())
-            .and_then(|value| value.checked_sub(1))
-            .ok_or_else(|| format!("invalid typed binding source step: {from_step}"))?;
-        let source = context.get(index)
-            .and_then(|value| value.get("output"))
+        let source = context.iter()
+            .find(|entry| entry.id.as_deref() == Some(from_step))
+            .and_then(|entry| entry.value.get("output"))
             .ok_or_else(|| format!("typed binding source output is unavailable: {from_step}"))?;
         let mut current = source;
         for segment in from_path.split('.') {
@@ -193,7 +196,7 @@ fn resolve_semantic_plugin_input(value: Value, context: &[Value]) -> Result<Valu
             goal,
             hints,
             memory: Value::Null,
-            prior_outputs: context.to_vec(),
+            prior_outputs: context.iter().map(|entry| entry.value.clone()).collect(),
         },
     ).map_err(|error| error.to_string())?;
     if !mapping.valid() {
@@ -226,9 +229,11 @@ impl AgentExecutor for PluginExecutorBridge {
             input,
             approved: value.get("approved").and_then(Value::as_bool).unwrap_or(false),
         };
+        let step_id = value.get("step_id").and_then(Value::as_str).map(str::to_string);
         let result = self.executor.execute(call).await.map_err(|error| error.to_string())?;
         let serialized = serde_json::to_value(&result).map_err(|error| error.to_string())?;
-        self.context.lock().map_err(|_| "plugin context lock poisoned".to_string())?.push(serialized);
+        self.context.lock().map_err(|_| "plugin context lock poisoned".to_string())?
+            .push(PluginStepContext { id: step_id, value: serialized });
         Ok(AgentOutcome {
             objective: task.objective.clone(),
             success: true,
