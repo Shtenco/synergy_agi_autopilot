@@ -201,7 +201,7 @@ fn map_field(
     let goal = context.goal.trim();
 
     if kind == "object" {
-        if let Ok(result) = Self::map(schema, context) {
+        if let Ok(result) = SemanticArgumentMapper::map(schema, context) {
             if !result.arguments.as_object().is_some_and(|v| v.is_empty()) {
                 evidence.extend(result.evidence.into_iter().map(|mut item| {
                     item.field = format!("{field}.{}", item.field);
@@ -329,7 +329,7 @@ fn looks_like_url(value: &str) -> bool {
 
 fn extract_quoted(text: &str) -> Option<String> {
     for (open, close) in [('"','"'), ('«','»'), ('“','”')] {
-        let start = text.find(open)?;
+        let Some(start) = text.find(open) else { continue };
         let rest = &text[start + open.len_utf8()..];
         if let Some(end) = rest.find(close) {
             let value = rest[..end].trim();
