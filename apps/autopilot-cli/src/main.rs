@@ -15,7 +15,7 @@ use autopilot_capability_graph::{CapabilityQuery, RepositoryCatalog};
 use autopilot_core::{AgentExecutor, AgentOutcome, Director, DirectorConfig, GoalRequest, PlannedTask, Planner, VerificationOutcome, Verifier};
 use autopilot_delivery::{CiReport, CiState, DeliveryConfig, DeliveryEngine};
 use autopilot_domain::{AgentRole, Capability, Evidence, RiskClass};
-use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, FleetEngine, FleetEngineConfig, PluginGoalEngine, PluginGoalStep, VerificationCommand};
+use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, FleetEngine, FleetEngineConfig, GraphGoalEngine, PluginGoalEngine, PluginGoalStep, VerificationCommand};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
@@ -38,6 +38,17 @@ enum Commands {
         #[arg(long = "keyword")] keywords: Vec<String>,
         #[arg(long)] transport: Option<String>,
         #[arg(long, default_value_t = 20)] limit: usize,
+    },
+    CapabilityPlan {
+        #[arg(long)] goal: String,
+        #[arg(long, default_value_t = 8)] max_routes: usize,
+    },
+    GraphGoal {
+        #[arg(long)] goal: String,
+        #[arg(long, default_value_t = 3)] max_routes: usize,
+        #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long)] control_db: Option<PathBuf>,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
     },
     AutomationAdd {
         #[arg(long)] db: PathBuf,
@@ -519,6 +530,58 @@ async fn main() -> Result<(), String> {
                     );
                 }
             }
+        },
+        Commands::CapabilityPlan { goal, max_routes } => {
+            let graph = initial_capability_graph()?;
+            let routes = graph.route_goal(&goal, max_routes);
+            if routes.is_empty() {
+                println!("no executable capability routes matched");
+            } else {
+                for route in routes {
+                    println!(
+                        "capability={}\tprovider={}\trepository={}\tscore={}\tmatched={}",
+                        route.capability,
+                        route.provider,
+                        route.repository.unwrap_or_else(|| "-".into()),
+                        route.score,
+                        route.matched_terms.into_iter().collect::<Vec<_>>().join(","),
+                    );
+                }
+            }
+        },
+        Commands::GraphGoal { goal, max_routes, workspace, control_db, allow_env } => {
+            let graph = Arc::new(initial_capability_graph()?);
+            let registry = initial_plugin_registry()?;
+            let mut config = PluginRuntimeConfig::default();
+            config.local_workspace = workspace;
+            config.control_plane_db = control_db;
+            config.timeout_ms = Some(120_000);
+            config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
+            config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
+            config.bearer_token_env.insert("business.auto-company".into(), "SYNERGY_API_TOKEN".into());
+            config.bearer_token_env.insert("connector.gateway".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.email".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.calendar".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.crm".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            for plugin_id in registry.list().map(|manifest| manifest.id.clone()).collect::<Vec<_>>() {
+                if !allow_env.is_empty() { config.env_allowlist.insert(plugin_id, allow_env.clone()); }
+            }
+            let executor = Arc::new(PluginExecutor::new(
+                registry,
+                PolicyEngine::default(),
+                Arc::new(NativeRuntime::default()),
+                config,
+            ));
+            let audit = Arc::new(InMemoryAuditStore::default());
+            let engine = GraphGoalEngine::new(graph, audit.clone(), executor, max_routes);
+            let summary = engine.run(goal).await.map_err(|error| error.to_string())?;
+            println!(
+                "final_state={:?}\tevidence={}\taudit_events={}\tblocked_by_policy={}",
+                summary.final_state,
+                summary.evidence.len(),
+                audit.list_by_correlation(summary.correlation_id).await?.len(),
+                summary.blocked_by_policy,
+            );
         },
         Commands::AutomationAdd { db, name, goal, trigger_json } => {
             let trigger: Trigger = serde_json::from_str(&trigger_json)
