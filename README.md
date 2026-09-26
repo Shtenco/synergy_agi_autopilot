@@ -15,6 +15,7 @@ See:
 - `docs/M5_UNIVERSAL_EXECUTION_FABRIC_STATUS.md`
 - `docs/M6_FULL_AUTOMATION_STATUS.md`
 - `docs/M7_CAPABILITY_GRAPH_STATUS.md`
+- `docs/M8_SELF_BUILDING_PLUGIN_FABRIC_STATUS.md`
 - `docs/architecture/plugin-fabric-v1.md`
 
 Current convergence line also includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, and a Capability Graph seeded from all 73 currently accessible Shtenco repositories.
@@ -253,3 +254,37 @@ docs/superpowers/         Architecture and implementation plans
 ## License and provenance
 
 See `THIRD_PARTY_NOTICES.md`. Any future third-party source incorporation must be license-compatible and recorded with exact provenance; architectural inspiration alone is implemented clean-room here.
+
+
+## M8 — Self-Building Plugin Fabric
+
+When the Capability Graph cannot satisfy a goal, Autopilot can now create a structured semantic gap plan and attempt safe self-extension.
+
+Current automatic discovery paths:
+
+- OpenAPI documents;
+- MCP configurations + sandbox `tools/list`.
+
+Generated adapters move through:
+
+`Quarantined -> Qualified/Rejected -> Promoted`
+
+Safe read-oriented adapters may be auto-promoted under policy. High-risk or approval-required adapters remain blocked until explicit promotion/approval.
+
+Use:
+
+```text
+open-autopilot semantic-gap
+open-autopilot plugin-build
+open-autopilot plugin-qualify
+open-autopilot plugin-promote
+open-autopilot universal-goal
+```
+
+Generated MCP/CLI programs require an explicit runtime executable allowlist, and Low/Medium execution requires a read-only isolating runtime.
+
+Canonical qualification command:
+
+```powershell
+.\scripts\verify-autopilot.ps1
+```
