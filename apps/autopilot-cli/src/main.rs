@@ -295,12 +295,22 @@ fn workflow_to_plugin_steps(
     plan: &WorkflowPlan,
     approved_steps: &BTreeSet<String>,
     approval_ids: &BTreeMap<String,String>,
+    require_persisted_approval: bool,
 ) -> Result<Vec<PluginGoalStep>, String> {
     let mut steps = Vec::new();
     for step in &plan.steps {
         if step.requires_approval && !approved_steps.contains(&step.id) {
             return Err(format!(
                 "workflow step {} requires approval; add --approve-step {}",
+                step.id, step.id
+            ));
+        }
+        if step.requires_approval
+            && require_persisted_approval
+            && !approval_ids.contains_key(&step.id)
+        {
+            return Err(format!(
+                "workflow step {} requires persisted approval; add --approval-id {}=<uuid>",
                 step.id, step.id
             ));
         }
@@ -753,7 +763,12 @@ async fn main() -> Result<(), String> {
 
             let approved_steps = approve_step.into_iter().collect::<BTreeSet<_>>();
             let approval_ids = parse_step_value_map(&approval_id, "--approval-id")?;
-            let steps = workflow_to_plugin_steps(&plan, &approved_steps, &approval_ids)?;
+            let steps = workflow_to_plugin_steps(
+                &plan,
+                &approved_steps,
+                &approval_ids,
+                control_db.is_some(),
+            )?;
 
             let execution_runtime = build_plugin_runtime(
                 &runtime,
@@ -1023,7 +1038,12 @@ async fn main() -> Result<(), String> {
                     step.id, step.plugin_id, step.capability, step.id
                 ));
             }
-            let steps = workflow_to_plugin_steps(&plan, &BTreeSet::new(), &BTreeMap::new())?;
+            let steps = workflow_to_plugin_steps(
+                &plan,
+                &BTreeSet::new(),
+                &BTreeMap::new(),
+                false,
+            )?;
             let engine = PluginGoalEngine::new(audit.clone(), executor, steps, 0);
             let summary = engine.run(goal.clone()).await.map_err(|error| error.to_string())?;
             println!(
