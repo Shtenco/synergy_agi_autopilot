@@ -19,7 +19,7 @@ use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, Fle
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
-use autopilot_plugin_builder::{BuildDiscoveryChain, BuildRequest, CandidateStore, FilesystemMcpDiscovery, FilesystemOpenApiDiscovery, PluginBuilder, SandboxQualifier, SelfBuildCoordinator, SelfBuildOutcome, SelfBuildPolicy, SemanticGapDetector};
+use autopilot_plugin_builder::{BuildDiscoveryChain, BuildRequest, CandidateStore, FilesystemCliDescriptorDiscovery, FilesystemMcpDiscovery, FilesystemOpenApiDiscovery, PluginBuilder, SandboxQualifier, SelfBuildCoordinator, SelfBuildOutcome, SelfBuildPolicy, SemanticGapDetector};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
@@ -889,10 +889,11 @@ async fn main() -> Result<(), String> {
                 let discovery = BuildDiscoveryChain::new(vec![
                     Arc::new(FilesystemOpenApiDiscovery::new(discovery_root.clone(), base_url)),
                     Arc::new(FilesystemMcpDiscovery::new(
-                        discovery_root,
+                        discovery_root.clone(),
                         execution_runtime.clone(),
                         allowed_programs.clone(),
                     )),
+                    Arc::new(FilesystemCliDescriptorDiscovery::new(discovery_root)),
                 ]);
                 let qualifier = SandboxQualifier::new(
                     execution_runtime.clone(),
