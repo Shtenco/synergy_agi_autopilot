@@ -138,5 +138,107 @@
       ],
       "additionalProperties": false
     }
+  },
+  "output_contracts": {
+    "memory.search": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "namespace": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "namespace",
+              "key",
+              "content",
+              "metadata",
+              "updated_at"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": true
+    },
+    "memory.upsert": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "namespace",
+        "key"
+      ],
+      "additionalProperties": true
+    },
+    "intelligence.infer": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "result": {},
+        "bridge_only": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ok",
+        "result",
+        "bridge_only"
+      ],
+      "additionalProperties": true
+    },
+    "intelligence.reason": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "result": {},
+        "bridge_only": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ok",
+        "result",
+        "bridge_only"
+      ],
+      "additionalProperties": true
+    }
   }
 }
