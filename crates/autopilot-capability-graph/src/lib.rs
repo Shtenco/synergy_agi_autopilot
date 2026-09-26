@@ -25,6 +25,25 @@ pub struct RepositoryDescriptor {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepositoryCatalog {
+    pub schema: String,
+    pub owner: String,
+    pub repository_count: usize,
+    #[serde(default)]
+    pub repositories: Vec<RepositoryDescriptor>,
+}
+
+impl RepositoryCatalog {
+    pub fn into_graph(self) -> Result<CapabilityGraph, CapabilityGraphError> {
+        let mut graph = CapabilityGraph::default();
+        for repository in self.repositories {
+            graph.add_repository(repository)?;
+        }
+        Ok(graph)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapabilityNode {
     pub name: String,
     pub providers: BTreeSet<String>,
