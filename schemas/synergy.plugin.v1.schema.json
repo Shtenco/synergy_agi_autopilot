@@ -222,6 +222,12 @@
       "additionalProperties": {
         "type": "object"
       }
+    },
+    "output_contracts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
     }
   }
 }
