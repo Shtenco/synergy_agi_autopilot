@@ -184,7 +184,7 @@ impl ControlPlaneStore {
                 spec.name,
                 spec.goal,
                 serde_json::to_string(&spec.trigger)?,
-                i64::from(spec.enabled),
+                if spec.enabled { 1i64 } else { 0i64 },
                 now,
             ],
         )?;
