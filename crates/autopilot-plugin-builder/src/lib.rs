@@ -278,3 +278,232 @@ fn validate_program(program: &str) -> Result<(), BuilderError> {
 fn contains_shell_meta(value: &str) -> bool {
     [';', '|', '&', '>', '<', '`', '\n', '\r'].iter().any(|c| value.contains(*c))
 }
+
+
+#[async_trait]
+pub trait CandidateQualifier: Send + Sync {
+    async fn qualify(&self, candidate: &PluginCandidate) -> QualificationReport;
+}
+
+pub struct SandboxQualifier {
+    runtime: Arc<dyn RuntimeAdapter>,
+    allowed_programs: BTreeSet<String>,
+}
+
+impl SandboxQualifier {
+    pub fn new(runtime: Arc<dyn RuntimeAdapter>, allowed_programs: BTreeSet<String>) -> Self {
+        Self { runtime, allowed_programs }
+    }
+
+    fn static_checks(&self, candidate: &PluginCandidate) -> Vec<QualificationCheck> {
+        vec![
+            QualificationCheck {
+                name: "manifest".into(),
+                passed: candidate.manifest.validate().is_ok(),
+                detail: "synergy.plugin.v1 manifest validates".into(),
+            },
+            QualificationCheck {
+                name: "disabled_by_default".into(),
+                passed: !candidate.manifest.enabled_by_default,
+                detail: "generated candidates remain disabled until promotion".into(),
+            },
+            QualificationCheck {
+                name: "approval_for_high_risk".into(),
+                passed: candidate.manifest.capabilities.iter().all(|cap| {
+                    cap.risk < RiskClass::High || cap.requires_approval
+                }),
+                detail: "high-risk generated capabilities require approval".into(),
+            },
+            QualificationCheck {
+                name: "source_contract".into(),
+                passed: validate_source(&candidate.source).is_ok(),
+                detail: "adapter source passes transport-specific validation".into(),
+            },
+        ]
+    }
+
+    async fn probe(&self, candidate: &PluginCandidate) -> QualificationCheck {
+        match &candidate.source {
+            AdapterSource::OpenApi { .. } => QualificationCheck {
+                name: "sandbox_probe".into(),
+                passed: true,
+                detail: "OpenAPI uses trusted Connector Gateway; mutating external requests are never auto-probed".into(),
+            },
+            AdapterSource::McpStdio { command, args, .. } => {
+                self.probe_program(command, args, "MCP").await
+            }
+            AdapterSource::Cli { program, args } => {
+                self.probe_program(program, args, "CLI").await
+            }
+        }
+    }
+
+    async fn probe_program(&self, program: &str, args: &[String], label: &str) -> QualificationCheck {
+        if !self.allowed_programs.contains(program) {
+            return QualificationCheck {
+                name: "sandbox_probe".into(),
+                passed: false,
+                detail: format!("program is not in sandbox allowlist: {program}"),
+            };
+        }
+        let spec = CommandSpec::new(program.to_string())
+            .args(args.to_vec())
+            .profile(ExecutionProfile::ReadOnly);
+        match self.runtime.execute(spec).await {
+            Ok(result) if result.exit_code == 0 => QualificationCheck {
+                name: "sandbox_probe".into(),
+                passed: true,
+                detail: format!("{label} probe completed in read-only sandbox profile"),
+            },
+            Ok(result) => QualificationCheck {
+                name: "sandbox_probe".into(),
+                passed: false,
+                detail: format!("probe exit={} stderr={}", result.exit_code, result.stderr),
+            },
+            Err(error) => QualificationCheck {
+                name: "sandbox_probe".into(),
+                passed: false,
+                detail: error.to_string(),
+            },
+        }
+    }
+}
+
+#[async_trait]
+impl CandidateQualifier for SandboxQualifier {
+    async fn qualify(&self, candidate: &PluginCandidate) -> QualificationReport {
+        let mut checks = self.static_checks(candidate);
+        checks.push(self.probe(candidate).await);
+        QualificationReport { checked_at: Utc::now(), checks }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CandidateStore {
+    root: PathBuf,
+}
+
+impl CandidateStore {
+    pub fn new(root: impl Into<PathBuf>) -> Self { Self { root: root.into() } }
+
+    fn candidate_dir(&self, id: Uuid) -> PathBuf { self.root.join(id.to_string()) }
+
+    pub fn save(&self, candidate: &PluginCandidate) -> Result<(), BuilderError> {
+        let dir = self.candidate_dir(candidate.candidate_id);
+        fs::create_dir_all(&dir).map_err(|error| BuilderError::Io(error.to_string()))?;
+        let raw = serde_json::to_string_pretty(candidate)
+            .map_err(|error| BuilderError::Json(error.to_string()))?;
+        fs::write(dir.join("candidate.json"), raw)
+            .map_err(|error| BuilderError::Io(error.to_string()))
+    }
+
+    pub fn load(&self, id: Uuid) -> Result<PluginCandidate, BuilderError> {
+        let raw = fs::read_to_string(self.candidate_dir(id).join("candidate.json"))
+            .map_err(|error| BuilderError::Io(error.to_string()))?;
+        serde_json::from_str(&raw).map_err(|error| BuilderError::Json(error.to_string()))
+    }
+
+    pub async fn qualify<Q: CandidateQualifier>(
+        &self,
+        id: Uuid,
+        qualifier: &Q,
+    ) -> Result<PluginCandidate, BuilderError> {
+        let mut candidate = self.load(id)?;
+        let report = qualifier.qualify(&candidate).await;
+        candidate.state = if report.passed() {
+            CandidateState::Qualified
+        } else {
+            CandidateState::Rejected
+        };
+        candidate.qualification = Some(report);
+        self.save(&candidate)?;
+        Ok(candidate)
+    }
+
+    pub fn promote(
+        &self,
+        id: Uuid,
+        generated_plugins_root: impl AsRef<Path>,
+    ) -> Result<PathBuf, BuilderError> {
+        let mut candidate = self.load(id)?;
+        match candidate.state {
+            CandidateState::Qualified => {}
+            CandidateState::Promoted => return Err(BuilderError::AlreadyPromoted),
+            CandidateState::Quarantined | CandidateState::Rejected => {
+                return Err(BuilderError::NotQualified)
+            }
+        }
+        let target = generated_plugins_root.as_ref()
+            .join(&candidate.manifest.id)
+            .join("plugin.json");
+        let parent = target.parent()
+            .ok_or_else(|| BuilderError::Io("invalid target path".into()))?;
+        fs::create_dir_all(parent).map_err(|error| BuilderError::Io(error.to_string()))?;
+        let raw = serde_json::to_string_pretty(&candidate.manifest)
+            .map_err(|error| BuilderError::Json(error.to_string()))?;
+        fs::write(&target, raw).map_err(|error| BuilderError::Io(error.to_string()))?;
+        candidate.state = CandidateState::Promoted;
+        self.save(&candidate)?;
+        Ok(target)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use autopilot_runtime::{CommandResult, FakeRuntime};
+
+    #[test]
+    fn detects_semantic_gap_when_graph_has_no_provider() {
+        let graph = CapabilityGraph::default();
+        let gap = SemanticGapDetector::detect(&graph, "прочитай неизвестную CRM").unwrap();
+        assert!(!gap.suggested_capability.is_empty());
+    }
+
+    #[test]
+    fn generates_openapi_candidate_disabled_by_default() {
+        let source = AdapterSource::OpenApi {
+            base_url: "https://api.example.com".into(),
+            operation_id: "getLead".into(),
+            document: serde_json::json!({
+                "paths": {"/leads/{id}": {"get": {"operationId": "getLead"}}}
+            }),
+        };
+        let candidate = PluginBuilder::build(BuildRequest {
+            plugin_id: "generated.example.crm".into(),
+            display_name: "Generated Example CRM".into(),
+            capability: "crm.read".into(),
+            source,
+            risk: RiskClass::Medium,
+            requires_approval: false,
+            tags: ["crm".to_string()].into_iter().collect(),
+        }).unwrap();
+        assert!(!candidate.manifest.enabled_by_default);
+        assert!(candidate.manifest.requires.contains("connector.gateway"));
+    }
+
+    #[tokio::test]
+    async fn unallowlisted_cli_candidate_is_rejected_by_sandbox() {
+        let runtime = Arc::new(FakeRuntime::new(CommandResult {
+            exit_code: 0,
+            stdout: String::new(),
+            stderr: String::new(),
+            duration_ms: 1,
+        }));
+        let qualifier = SandboxQualifier::new(runtime, BTreeSet::new());
+        let candidate = PluginBuilder::build(BuildRequest {
+            plugin_id: "generated.cli.test".into(),
+            display_name: "CLI test".into(),
+            capability: "custom.test.read".into(),
+            source: AdapterSource::Cli {
+                program: "unknown-tool".into(),
+                args: vec!["--version".into()],
+            },
+            risk: RiskClass::Low,
+            requires_approval: false,
+            tags: BTreeSet::new(),
+        }).unwrap();
+        let report = qualifier.qualify(&candidate).await;
+        assert!(!report.passed());
+    }
+}
