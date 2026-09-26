@@ -759,6 +759,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn self_build_coordinator_auto_promotes_safe_openapi_candidate() {
+        let root = std::env::temp_dir().join(format!("autopilot-self-build-{}", Uuid::new_v4()));
+        let request = BuildRequest {
+            plugin_id: "generated.crm.read".into(),
+            display_name: "Generated CRM Reader".into(),
+            capability: "crm.read".into(),
+            source: AdapterSource::OpenApi {
+                base_url: "https://api.example.com".into(),
+                operation_id: "listLeads".into(),
+                document: serde_json::json!({
+                    "paths": {"/leads": {"get": {"operationId": "listLeads"}}}
+                }),
+            },
+            risk: RiskClass::Medium,
+            requires_approval: false,
+            tags: ["crm".to_string()].into_iter().collect(),
+        };
+        let runtime = Arc::new(FakeRuntime::new(CommandResult {
+            exit_code: 0, stdout: String::new(), stderr: String::new(), duration_ms: 1,
+        }));
+        let coordinator = SelfBuildCoordinator::new(
+            CandidateStore::new(root.join("quarantine")),
+            SandboxQualifier::new(runtime, BTreeSet::new()),
+            StaticBuildDiscovery { requests: vec![request] },
+            SelfBuildPolicy::default(),
+            root.join("generated"),
+        );
+        let outcome = coordinator.ensure_for_goal(
+            &CapabilityGraph::default(),
+            "прочитай CRM",
+        ).await.unwrap();
+        match outcome {
+            SelfBuildOutcome::Promoted { manifest_path, candidate } => {
+                assert!(manifest_path.is_file());
+                assert_eq!(candidate.state, CandidateState::Promoted);
+            }
+            other => panic!("unexpected self-build outcome: {other:?}"),
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn high_risk_self_build_requires_explicit_promotion() {
+        let root = std::env::temp_dir().join(format!("autopilot-self-build-high-{}", Uuid::new_v4()));
+        let request = BuildRequest {
+            plugin_id: "generated.crm.write".into(),
+            display_name: "Generated CRM Writer".into(),
+            capability: "crm.read".into(),
+            source: AdapterSource::OpenApi {
+                base_url: "https://api.example.com".into(),
+                operation_id: "updateLead".into(),
+                document: serde_json::json!({
+                    "paths": {"/leads": {"post": {"operationId": "updateLead"}}}
+                }),
+            },
+            risk: RiskClass::High,
+            requires_approval: true,
+            tags: ["crm".to_string()].into_iter().collect(),
+        };
+        let runtime = Arc::new(FakeRuntime::new(CommandResult {
+            exit_code: 0, stdout: String::new(), stderr: String::new(), duration_ms: 1,
+        }));
+        let coordinator = SelfBuildCoordinator::new(
+            CandidateStore::new(root.join("quarantine")),
+            SandboxQualifier::new(runtime, BTreeSet::new()),
+            StaticBuildDiscovery { requests: vec![request] },
+            SelfBuildPolicy::default(),
+            root.join("generated"),
+        );
+        let outcome = coordinator.ensure_for_goal(
+            &CapabilityGraph::default(),
+            "прочитай CRM",
+        ).await.unwrap();
+        assert!(matches!(outcome, SelfBuildOutcome::QualifiedAwaitingPromotion { .. }));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
     async fn unallowlisted_cli_candidate_is_rejected_by_sandbox() {
         let runtime = Arc::new(FakeRuntime::new(CommandResult {
             exit_code: 0,
