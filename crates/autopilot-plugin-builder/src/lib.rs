@@ -782,30 +782,45 @@ impl<Q: CandidateQualifier, D: BuildDiscovery> SelfBuildCoordinator<Q, D> {
             return Ok(SelfBuildOutcome::ExistingProvider);
         };
         let requests = self.discovery.discover(&plan).await?;
-        let Some(request) = requests.into_iter().next() else {
+        if requests.is_empty() {
             return Ok(SelfBuildOutcome::DiscoveryEmpty { plan });
-        };
-        let candidate = PluginBuilder::build(request)?;
-        let id = candidate.candidate_id;
-        self.store.save(&candidate)?;
-        let candidate = self.store.qualify(id, &self.qualifier).await?;
-        if candidate.state != CandidateState::Qualified {
-            return Ok(SelfBuildOutcome::CandidateRejected { candidate });
         }
 
-        let capability = candidate.manifest.capabilities.first()
-            .ok_or_else(|| BuilderError::Invalid("generated candidate exposes no capability".into()))?;
-        let auto_promotable = self.policy.auto_promote
-            && capability.risk <= self.policy.max_auto_promote_risk
-            && !capability.requires_approval;
+        let mut last_rejected = None;
+        for request in requests {
+            let candidate = match PluginBuilder::build(request) {
+                Ok(candidate) => candidate,
+                Err(BuilderError::Invalid(_)) => continue,
+                Err(error) => return Err(error),
+            };
+            let id = candidate.candidate_id;
+            self.store.save(&candidate)?;
+            let candidate = self.store.qualify(id, &self.qualifier).await?;
+            if candidate.state != CandidateState::Qualified {
+                last_rejected = Some(candidate);
+                continue;
+            }
 
-        if !auto_promotable {
-            return Ok(SelfBuildOutcome::QualifiedAwaitingPromotion { candidate });
+            let capability = candidate.manifest.capabilities.first()
+                .ok_or_else(|| BuilderError::Invalid("generated candidate exposes no capability".into()))?;
+            let auto_promotable = self.policy.auto_promote
+                && capability.risk <= self.policy.max_auto_promote_risk
+                && !capability.requires_approval;
+
+            if !auto_promotable {
+                return Ok(SelfBuildOutcome::QualifiedAwaitingPromotion { candidate });
+            }
+
+            let manifest_path = self.store.promote(id, &self.generated_plugins_root)?;
+            let candidate = self.store.load(id)?;
+            return Ok(SelfBuildOutcome::Promoted { candidate, manifest_path });
         }
 
-        let manifest_path = self.store.promote(id, &self.generated_plugins_root)?;
-        let candidate = self.store.load(id)?;
-        Ok(SelfBuildOutcome::Promoted { candidate, manifest_path })
+        if let Some(candidate) = last_rejected {
+            Ok(SelfBuildOutcome::CandidateRejected { candidate })
+        } else {
+            Ok(SelfBuildOutcome::DiscoveryEmpty { plan })
+        }
     }
 }
 
