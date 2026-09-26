@@ -599,6 +599,30 @@ mod tests {
     }
 
     #[test]
+    fn dependent_step_can_defer_required_argument() {
+        let step = WorkflowStep {
+            id: "step-2".into(),
+            objective: "send".into(),
+            plugin_id: "email".into(),
+            capability: "email.send".into(),
+            risk: RiskClass::High,
+            input_contract: serde_json::json!({
+                "type":"object",
+                "properties":{"client_id":{"type":"string"}},
+                "required":["client_id"]
+            }),
+            contract_declared: true,
+            mapped_arguments: serde_json::json!({}),
+            unresolved_required: ["client_id".to_string()].into_iter().collect(),
+            validation_errors: Vec::new(),
+            depends_on: vec!["step-1".into()],
+            requires_approval: true,
+        };
+        assert!(step.ready());
+        assert!(step.requires_runtime_mapping());
+    }
+
+    #[test]
     fn synthesizes_linear_workflow_from_goal_clauses() {
         let mut registry = PluginRegistry::default();
         for (id, capability) in [("sales","business.sales.qualify"),("email","email.send")] {
@@ -616,7 +640,7 @@ mod tests {
                     mapped_core_capabilities:BTreeSet::new(),
                 }],
                 endpoints:vec![],
-                tags:[if id=="sales" {"sales"} else {"email"}.to_string()].into_iter().collect(),
+                tags:[if id=="sales" { "sales".to_string() } else { "email".to_string() }].into_iter().collect(),
                 requires:BTreeSet::new(),
                 enabled_by_default:false,
                 adapter:None,
