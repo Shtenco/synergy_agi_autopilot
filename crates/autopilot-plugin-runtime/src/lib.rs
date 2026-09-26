@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use autopilot_automation::CircuitBreaker;
 use autopilot_control_plane::{ApprovalStatus, ControlPlaneStore};
-use autopilot_plugins::{PluginManifest, PluginRegistry};
+use autopilot_plugins::{PluginAdapter, PluginManifest, PluginRegistry};
 use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use autopilot_secrets::{EnvSecretVault, SecretRef, SecretVault};
@@ -40,6 +40,7 @@ pub struct PluginRuntimeConfig {
     pub env_allowlist: BTreeMap<String, Vec<String>>,
     pub bearer_token_env: BTreeMap<String, String>,
     pub control_plane_db: Option<PathBuf>,
+    pub generated_program_allowlist: BTreeSet<String>,
     pub timeout_ms: Option<u64>,
 }
 
@@ -183,6 +184,7 @@ impl PluginExecutor {
             "connector.gateway" | "capability.email" | "capability.calendar" | "capability.crm" => {
                 self.call_connector_gateway(manifest, call).await
             }
+            _ if manifest.adapter.is_some() => self.call_generated_adapter(manifest, call).await,
             _ => Err(PluginRuntimeError::NoEndpoint(manifest.id.clone())),
         };
 
@@ -484,6 +486,90 @@ impl PluginExecutor {
             transport: "connector-gateway".into(),
             output,
         })
+    }
+
+    async fn call_generated_adapter(
+        &self,
+        manifest: &PluginManifest,
+        call: PluginCall,
+    ) -> Result<PluginResult, PluginRuntimeError> {
+        let adapter = manifest.adapter.as_ref()
+            .ok_or_else(|| PluginRuntimeError::NoEndpoint(manifest.id.clone()))?;
+        match adapter {
+            PluginAdapter::OpenApi { base_url, operation_id, document } => {
+                let mut payload = json!({
+                    "base_url": base_url,
+                    "operation_id": operation_id,
+                    "document": document,
+                    "path_params": call.input.get("path_params").cloned().unwrap_or_else(|| json!({})),
+                    "body": call.input.get("body").cloned().unwrap_or(Value::Null),
+                });
+                if let Some(oauth2) = call.input.get("oauth2") {
+                    payload["oauth2"] = oauth2.clone();
+                }
+                let output = self.http_json(
+                    "connector.gateway",
+                    "http://127.0.0.1:8150",
+                    "POST",
+                    "/v1/openapi",
+                    Some(payload),
+                ).await?;
+                Ok(PluginResult {
+                    plugin_id: manifest.id.clone(),
+                    capability: call.capability,
+                    transport: "generated+openapi_gateway".into(),
+                    output,
+                })
+            }
+            PluginAdapter::McpStdio { command, args, tool } => {
+                if !self.config.generated_program_allowlist.contains(command) {
+                    return Err(PluginRuntimeError::Denied(format!(
+                        "generated MCP program is not runtime-allowlisted: {command}"
+                    )));
+                }
+                let mut spec = CommandSpec::new(command.clone())
+                    .args(args.clone())
+                    .profile(ExecutionProfile::Host);
+                spec = self.apply_env_allowlist(&manifest.id, spec);
+                let output = self.mcp_stdio_call(spec, tool, call.input).await?;
+                Ok(PluginResult {
+                    plugin_id: manifest.id.clone(),
+                    capability: call.capability,
+                    transport: "generated+mcp_stdio".into(),
+                    output,
+                })
+            }
+            PluginAdapter::Cli { program, args } => {
+                if !self.config.generated_program_allowlist.contains(program) {
+                    return Err(PluginRuntimeError::Denied(format!(
+                        "generated CLI program is not runtime-allowlisted: {program}"
+                    )));
+                }
+                let mut spec = CommandSpec::new(program.clone())
+                    .args(args.clone())
+                    .profile(ExecutionProfile::Host)
+                    .stdin_data(call.input.to_string());
+                if let Some(workspace) = &self.config.local_workspace {
+                    spec = spec.cwd(workspace.clone());
+                }
+                spec = self.apply_env_allowlist(&manifest.id, spec);
+                let result = self.runtime.execute(spec).await
+                    .map_err(|error| PluginRuntimeError::Transport(error.to_string()))?;
+                if result.exit_code != 0 {
+                    return Err(PluginRuntimeError::Transport(format!(
+                        "generated CLI exit={} stderr={}", result.exit_code, result.stderr
+                    )));
+                }
+                let output = serde_json::from_str::<Value>(&result.stdout)
+                    .unwrap_or_else(|_| json!({"text":result.stdout}));
+                Ok(PluginResult {
+                    plugin_id: manifest.id.clone(),
+                    capability: call.capability,
+                    transport: "generated+cli".into(),
+                    output,
+                })
+            }
+        }
     }
 
     async fn call_auto_company(
