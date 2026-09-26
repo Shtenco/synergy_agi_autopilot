@@ -90,7 +90,7 @@ fn percent_encode(value: &str) -> String {
     value.bytes().map(|b| match b {
         b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
         _ => format!("%{:02X}", b),
-    }).collect()
+    }).collect::<Vec<_>>().join("")
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
