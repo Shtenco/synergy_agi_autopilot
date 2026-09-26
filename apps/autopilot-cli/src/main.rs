@@ -288,6 +288,21 @@ fn semantic_context_from_json(
     })
 }
 
+fn parse_cognitive_proposal_output(output: &serde_json::Value) -> Result<CognitivePlanProposal, String> {
+    let proposal_value = output.get("result").cloned()
+        .ok_or_else(|| "NEXUS cognitive planner returned no result".to_string())?;
+    if let Some(text) = proposal_value.as_str() {
+        serde_json::from_str(text)
+            .map_err(|error| format!("NEXUS returned invalid cognitive plan JSON: {error}"))
+    } else if let Some(text) = proposal_value.get("text").and_then(serde_json::Value::as_str) {
+        serde_json::from_str(text)
+            .map_err(|error| format!("NEXUS result.text is not a valid cognitive plan: {error}"))
+    } else {
+        serde_json::from_value(proposal_value)
+            .map_err(|error| format!("NEXUS result does not match cognitive plan schema: {error}"))
+    }
+}
+
 fn parse_step_value_map(values: &[String], flag: &str) -> Result<BTreeMap<String,String>, String> {
     let mut out = BTreeMap::new();
     for value in values {
@@ -792,18 +807,7 @@ async fn main() -> Result<(), String> {
                 approved:false,
             }).await.map_err(|error| error.to_string())?;
 
-            let proposal_value = result.output.get("result").cloned()
-                .ok_or_else(|| "NEXUS cognitive planner returned no result".to_string())?;
-            let proposal: CognitivePlanProposal = if let Some(text) = proposal_value.as_str() {
-                serde_json::from_str(text)
-                    .map_err(|error| format!("NEXUS returned invalid cognitive plan JSON: {error}"))?
-            } else if let Some(text) = proposal_value.get("text").and_then(serde_json::Value::as_str) {
-                serde_json::from_str(text)
-                    .map_err(|error| format!("NEXUS result.text is not a valid cognitive plan: {error}"))?
-            } else {
-                serde_json::from_value(proposal_value)
-                    .map_err(|error| format!("NEXUS result does not match cognitive plan schema: {error}"))?
-            };
+            let proposal = parse_cognitive_proposal_output(&result.output)?;
 
             let context = semantic_context_from_json(&goal, &hints_json, &memory_json)?;
             let plan = VerifiedCognitivePlanner::verify(&proposal, &registry, &context)
@@ -1041,15 +1045,16 @@ async fn main() -> Result<(), String> {
                                 ));
                             }
                             SelfBuildOutcome::DiscoveryEmpty { .. } => {
-                                return Err(format!(
-                                    "no typed provider or buildable adapter found for workflow objective: {objective}"
-                                ));
+                                eprintln!(
+                                    "self_build_deferred objective={:?} reason=no typed provider or buildable adapter; M10 cognitive fallback may reuse existing typed capabilities",
+                                    objective
+                                );
                             }
                             SelfBuildOutcome::CandidateRejected { candidate } => {
-                                return Err(format!(
-                                    "all discovered adapters for objective {:?} failed qualification; last candidate={}",
+                                eprintln!(
+                                    "self_build_deferred objective={:?} reason=last discovered candidate failed qualification candidate={}; M10 cognitive fallback may choose another existing typed route",
                                     objective, candidate.manifest.id
-                                ));
+                                );
                             }
                         }
                     }
@@ -1060,10 +1065,10 @@ async fn main() -> Result<(), String> {
 
                 let remaining = SemanticGapDetector::typed_gaps_for_goal(&graph, &registry, &goal);
                 if !remaining.is_empty() {
-                    return Err(format!(
-                        "M9 typed coverage incomplete after self-build: {:?}",
+                    eprintln!(
+                        "typed_coverage_remaining={:?}; continuing to M10 verified cognitive fallback",
                         remaining.iter().map(|gap| gap.goal.clone()).collect::<Vec<_>>()
-                    ));
+                    );
                 }
             }
 
@@ -1099,25 +1104,97 @@ async fn main() -> Result<(), String> {
                 prior_outputs: Vec::new(),
             };
 
-            let plan = AdaptiveWorkflowSynthesizer::synthesize(
+            let deterministic = AdaptiveWorkflowSynthesizer::synthesize(
                 &goal,
                 &graph,
                 &registry,
                 &semantic_context,
-            ).map_err(|error| format!("M9 workflow synthesis failed: {error}"))?;
-            println!(
-                "semantic_workflow={}\n",
-                serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?
             );
-            if !plan.ready {
-                return Err(format!(
-                    "M9 workflow is not ready: unresolved_objectives={:?}; resolve missing contracts/arguments before execution",
-                    plan.unresolved_objectives
-                ));
-            }
+
+            let plan = match deterministic {
+                Ok(plan) if plan.ready => {
+                    println!(
+                        "semantic_workflow={}\n",
+                        serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?
+                    );
+                    plan
+                }
+                Ok(plan) => {
+                    eprintln!(
+                        "M9 deterministic workflow not ready: unresolved_objectives={:?}; invoking M10 verified cognitive fallback",
+                        plan.unresolved_objectives
+                    );
+                    let prompt = cognitive_planner_prompt(&goal, &registry);
+                    let result = executor.execute(PluginCall {
+                        plugin_id:"intelligence.nexus".into(),
+                        capability:"intelligence.reason".into(),
+                        input:serde_json::json!({
+                            "prompt":prompt,
+                            "context":{"mode":"universal-goal-cognitive-fallback-v1"}
+                        }),
+                        approved:false,
+                    }).await.map_err(|error| format!(
+                        "M10 cognitive fallback unavailable after deterministic plan was not ready: {error}"
+                    ))?;
+                    let proposal = parse_cognitive_proposal_output(&result.output)?;
+                    let verified = VerifiedCognitivePlanner::verify(
+                        &proposal,
+                        &registry,
+                        &semantic_context,
+                    ).map_err(|error| format!("M10 cognitive proposal rejected: {error}"))?;
+                    println!(
+                        "cognitive_proposal={}\nverified_cognitive_dag={}\n",
+                        serde_json::to_string_pretty(&proposal).map_err(|error| error.to_string())?,
+                        serde_json::to_string_pretty(&verified).map_err(|error| error.to_string())?,
+                    );
+                    if !verified.ready {
+                        return Err(format!(
+                            "M10 verified cognitive DAG is not execution-ready: unresolved_objectives={:?}; unresolved_fields={:?}",
+                            verified.unresolved_objectives,
+                            verified.steps.iter()
+                                .filter(|step| !step.unresolved_required.is_empty())
+                                .map(|step| (step.id.clone(), step.unresolved_required.clone()))
+                                .collect::<Vec<_>>()
+                        ));
+                    }
+                    verified
+                }
+                Err(error) => {
+                    eprintln!("M9 deterministic workflow synthesis failed: {error}; invoking M10 verified cognitive fallback");
+                    let prompt = cognitive_planner_prompt(&goal, &registry);
+                    let result = executor.execute(PluginCall {
+                        plugin_id:"intelligence.nexus".into(),
+                        capability:"intelligence.reason".into(),
+                        input:serde_json::json!({
+                            "prompt":prompt,
+                            "context":{"mode":"universal-goal-cognitive-fallback-v1"}
+                        }),
+                        approved:false,
+                    }).await.map_err(|cognitive_error| format!(
+                        "M9 synthesis failed ({error}); M10 cognitive fallback unavailable ({cognitive_error})"
+                    ))?;
+                    let proposal = parse_cognitive_proposal_output(&result.output)?;
+                    let verified = VerifiedCognitivePlanner::verify(
+                        &proposal,
+                        &registry,
+                        &semantic_context,
+                    ).map_err(|verify_error| format!(
+                        "M9 synthesis failed ({error}); M10 cognitive proposal rejected ({verify_error})"
+                    ))?;
+                    println!(
+                        "cognitive_proposal={}\nverified_cognitive_dag={}\n",
+                        serde_json::to_string_pretty(&proposal).map_err(|error| error.to_string())?,
+                        serde_json::to_string_pretty(&verified).map_err(|error| error.to_string())?,
+                    );
+                    if !verified.ready {
+                        return Err("M10 verified cognitive DAG is not execution-ready".into());
+                    }
+                    verified
+                }
+            };
             if let Some(step) = plan.steps.iter().find(|step| step.requires_approval) {
                 return Err(format!(
-                    "M9 workflow step {} ({}/{}) requires explicit approval; use workflow-run --approve-step {}",
+                    "verified workflow step {} ({}/{}) requires explicit approval; use workflow-run --approve-step {}",
                     step.id, step.plugin_id, step.capability, step.id
                 ));
             }
