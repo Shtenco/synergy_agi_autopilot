@@ -907,8 +907,41 @@ pub struct CognitiveStepProposal {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CognitivePlanProposal {
+    pub schema: String,
     pub goal: String,
     pub steps: Vec<CognitiveStepProposal>,
+}
+
+pub fn cognitive_planner_prompt(goal: &str, registry: &PluginRegistry) -> String {
+    let catalog = registry.list().flat_map(|manifest| {
+        manifest.capabilities.iter().filter_map(move |capability| {
+            let input = manifest.input_contract(&capability.name)?.clone();
+            Some(serde_json::json!({
+                "plugin_id":manifest.id,
+                "capability":capability.name,
+                "input_contract":input,
+                "output_contract":manifest.output_contract(&capability.name),
+            }))
+        })
+    }).collect::<Vec<_>>();
+
+    serde_json::json!({
+        "task":"Create a candidate execution plan. Return JSON only. Do not invent plugins or capabilities. Do not include risk, approvals, dependencies, credentials, budgets, shell commands, or authority decisions. Those are determined by the verifier.",
+        "schema":"synergy.cognitive-plan.v1",
+        "goal":goal,
+        "available_typed_capabilities":catalog,
+        "required_output":{
+            "schema":"synergy.cognitive-plan.v1",
+            "goal":goal,
+            "steps":[{
+                "id":"stable-short-id",
+                "objective":"one bounded objective",
+                "plugin_id":"exact plugin_id from catalog",
+                "capability":"exact capability from catalog",
+                "hints":{}
+            }]
+        }
+    }).to_string()
 }
 
 pub struct VerifiedCognitivePlanner;
@@ -919,6 +952,12 @@ impl VerifiedCognitivePlanner {
         registry: &PluginRegistry,
         context: &MappingContext,
     ) -> Result<WorkflowPlan, SemanticError> {
+        if proposal.schema != "synergy.cognitive-plan.v1" {
+            return Err(SemanticError::InvalidCognitivePlan(format!(
+                "unsupported cognitive plan schema: {}",
+                proposal.schema
+            )));
+        }
         if proposal.steps.is_empty() {
             return Err(SemanticError::InvalidCognitivePlan("proposal has no steps".into()));
         }
@@ -1439,6 +1478,7 @@ mod tests {
         registry.register(manifest).unwrap();
 
         let proposal=CognitivePlanProposal {
+            schema:"synergy.cognitive-plan.v1".into(),
             goal:"send".into(),
             steps:vec![CognitiveStepProposal {
                 id:"send".into(),
@@ -1456,8 +1496,24 @@ mod tests {
     }
 
     #[test]
+    fn cognitive_plan_rejects_wrong_schema() {
+        let proposal=CognitivePlanProposal {
+            schema:"evil.plan.v1".into(),
+            goal:"x".into(),
+            steps:Vec::new(),
+        };
+        assert!(matches!(
+            VerifiedCognitivePlanner::verify(
+                &proposal,&PluginRegistry::default(),&MappingContext::default()
+            ),
+            Err(SemanticError::InvalidCognitivePlan(_))
+        ));
+    }
+
+    #[test]
     fn cognitive_plan_rejects_unknown_plugin() {
         let proposal=CognitivePlanProposal {
+            schema:"synergy.cognitive-plan.v1".into(),
             goal:"x".into(),
             steps:vec![CognitiveStepProposal {
                 id:"x".into(),
