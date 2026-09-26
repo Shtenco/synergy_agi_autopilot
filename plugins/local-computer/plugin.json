@@ -111,5 +111,20 @@
       "properties": {},
       "additionalProperties": false
     }
+  },
+  "output_contracts": {
+    "computer.read_file": {
+      "type": "string"
+    },
+    "computer.write_file": {
+      "type": "string",
+      "const": "OK"
+    },
+    "computer.run_command": {
+      "type": "string"
+    },
+    "computer.system_info": {
+      "type": "string"
+    }
   }
 }
