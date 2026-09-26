@@ -1086,6 +1086,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn filesystem_openapi_discovery_prefers_parameterless_get() {
+        let root = std::env::temp_dir().join(format!("autopilot-openapi-discovery-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("openapi.json"),
+            serde_json::json!({
+                "openapi":"3.0.0",
+                "servers":[{"url":"https://api.example.com"}],
+                "paths":{
+                    "/leads":{
+                        "get":{"operationId":"listLeads"},
+                        "post":{"operationId":"createLead"}
+                    },
+                    "/leads/{id}":{
+                        "get":{
+                            "operationId":"getLead",
+                            "parameters":[{"name":"id","in":"path","required":true}]
+                        }
+                    }
+                }
+            }).to_string(),
+        ).unwrap();
+        let discovery = FilesystemOpenApiDiscovery::new(&root, None);
+        let plan = SemanticGapDetector::self_build_plan(
+            &CapabilityGraph::default(),
+            "прочитай CRM",
+        ).unwrap();
+        let requests = discovery.discover(&plan).await.unwrap();
+        assert!(!requests.is_empty());
+        assert!(matches!(
+            requests[0].source,
+            AdapterSource::OpenApi { ref operation_id, .. } if operation_id == "listLeads"
+        ));
+        assert_eq!(requests[0].risk, RiskClass::Medium);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn filesystem_mcp_discovery_uses_tools_list_and_allowlist() {
+        let root = std::env::temp_dir().join(format!("autopilot-mcp-discovery-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("mcp.json"),
+            serde_json::json!({
+                "mcpServers":{
+                    "crm":{
+                        "command":"crm-mcp",
+                        "args":["--stdio"]
+                    }
+                }
+            }).to_string(),
+        ).unwrap();
+        let stdout = concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[{\"name\":\"crm_read\",\"description\":\"Read CRM leads\"}]}}\n"
+        );
+        let runtime = Arc::new(FakeRuntime::new(CommandResult {
+            exit_code: 0,
+            stdout: stdout.into(),
+            stderr: String::new(),
+            duration_ms: 1,
+        }));
+        let discovery = FilesystemMcpDiscovery::new(
+            &root,
+            runtime,
+            ["crm-mcp".to_string()].into_iter().collect(),
+        );
+        let plan = SemanticGapDetector::self_build_plan(
+            &CapabilityGraph::default(),
+            "прочитай CRM",
+        ).unwrap();
+        let requests = discovery.discover(&plan).await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(matches!(
+            requests[0].source,
+            AdapterSource::McpStdio { ref tool, .. } if tool == "crm_read"
+        ));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
     async fn self_build_coordinator_auto_promotes_safe_openapi_candidate() {
         let root = std::env::temp_dir().join(format!("autopilot-self-build-{}", Uuid::new_v4()));
         let request = BuildRequest {
