@@ -164,6 +164,8 @@ class OpenApiIn(BaseModel):
     operation_id: str
     document: dict[str, Any]
     path_params: dict[str, str] = Field(default_factory=dict)
+    query_params: dict[str, Any] = Field(default_factory=dict)
+    header_params: dict[str, str] = Field(default_factory=dict)
     body: Any = None
     oauth2: dict[str, Any] | None = None
 
@@ -223,7 +225,16 @@ def openapi_call(body: OpenApiIn, authorization: str | None = Header(default=Non
     if "{" in path:
         raise HTTPException(422, f"unresolved path params: {path}")
     url = body.base_url.rstrip("/") + path
+    if body.query_params:
+        query = urllib.parse.urlencode(body.query_params, doseq=True)
+        url = url + ("&" if "?" in url else "?") + query
+
+    forbidden_headers = {"host", "content-length", "authorization", "connection"}
     headers: dict[str, str] = {}
+    for key, value in body.header_params.items():
+        if key.lower() in forbidden_headers:
+            raise HTTPException(403, f"header cannot be supplied by generated adapter: {key}")
+        headers[key] = str(value)
     if body.oauth2:
         headers["Authorization"] = f"Bearer {oauth_token(body.oauth2)}"
     return request_json(url, method, headers, body.body)
