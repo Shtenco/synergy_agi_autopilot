@@ -77,11 +77,11 @@
         },
         "description": {
           "type": "string",
-          "minLength": 1
+          "default": ""
         },
         "url": {
           "type": "string",
-          "format": "uri"
+          "default": ""
         },
         "expected_revenue_usd": {
           "type": "number",
@@ -93,13 +93,10 @@
         },
         "probability": {
           "type": "number",
-          "minimum": 0,
-          "maximum": 1,
           "default": 0
         },
         "hours": {
           "type": "number",
-          "minimum": 0,
           "default": 0
         },
         "evidence": {
@@ -119,8 +116,7 @@
       },
       "required": [
         "title",
-        "source",
-        "description"
+        "source"
       ],
       "additionalProperties": false
     },
@@ -153,6 +149,138 @@
     "company.pause": {
       "type": "object",
       "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "output_contracts": {
+    "company.status": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "autopilot_runtime_enabled": {
+          "type": "boolean"
+        },
+        "nexus_runtime_enabled": {
+          "type": "boolean"
+        },
+        "operational_revenue_evidence_usd": {
+          "type": "number"
+        },
+        "operational_cost_usd": {
+          "type": "number"
+        },
+        "operational_margin_usd": {
+          "type": "number"
+        },
+        "financial_authority": {
+          "type": "string"
+        },
+        "ai_spend_today_usd": {
+          "type": "number"
+        },
+        "ai_daily_budget_usd": {
+          "type": "number"
+        },
+        "registry": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "mode",
+        "paused",
+        "autopilot_runtime_enabled",
+        "nexus_runtime_enabled",
+        "operational_revenue_evidence_usd",
+        "operational_cost_usd",
+        "operational_margin_usd",
+        "financial_authority",
+        "ai_spend_today_usd",
+        "ai_daily_budget_usd",
+        "registry"
+      ],
+      "additionalProperties": true
+    },
+    "company.opportunity.ingest": {
+      "type": "object",
+      "properties": {
+        "opportunity": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "score": {
+          "type": "number"
+        },
+        "validation_action": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "opportunity",
+        "score",
+        "validation_action"
+      ],
+      "additionalProperties": false
+    },
+    "company.action.approve": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "action_id": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "const": "approved"
+        }
+      },
+      "required": [
+        "ok",
+        "action_id",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "company.action.dispatch": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "result": {}
+      },
+      "required": [
+        "ok",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    "company.pause": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "paused": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "ok",
+        "paused"
+      ],
       "additionalProperties": false
     }
   }
