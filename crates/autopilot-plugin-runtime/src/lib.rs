@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use autopilot_automation::CircuitBreaker;
+use autopilot_control_plane::{ApprovalStatus, ControlPlaneStore};
 use autopilot_plugins::{PluginManifest, PluginRegistry};
 use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
@@ -13,6 +14,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PluginCall {
@@ -37,6 +39,7 @@ pub struct PluginRuntimeConfig {
     pub local_workspace: Option<PathBuf>,
     pub env_allowlist: BTreeMap<String, Vec<String>>,
     pub bearer_token_env: BTreeMap<String, String>,
+    pub control_plane_db: Option<PathBuf>,
     pub timeout_ms: Option<u64>,
 }
 
@@ -60,6 +63,10 @@ pub enum PluginRuntimeError {
     Http(String),
     #[error("plugin circuit breaker is open: {0}")]
     CircuitOpen(String),
+    #[error("persistent approval verification failed: {0}")]
+    PersistentApproval(String),
+    #[error("budget verification failed: {0}")]
+    Budget(String),
 }
 
 pub struct PluginExecutor {
@@ -89,8 +96,28 @@ impl PluginExecutor {
                 capability: call.capability.clone(),
             }
         })?;
-        if capability.requires_approval && !call.approved {
-            return Err(PluginRuntimeError::ApprovalRequired(call.capability.clone()));
+        if capability.requires_approval {
+            if !call.approved {
+                return Err(PluginRuntimeError::ApprovalRequired(call.capability.clone()));
+            }
+            if let Some(db) = &self.config.control_plane_db {
+                let approval_id = call.input.get("_approval_id").and_then(Value::as_str)
+                    .ok_or_else(|| PluginRuntimeError::PersistentApproval(
+                        format!("{} requires _approval_id when persistent control plane is enabled", call.capability)
+                    ))?;
+                let approval_id = Uuid::parse_str(approval_id)
+                    .map_err(|error| PluginRuntimeError::PersistentApproval(error.to_string()))?;
+                let store = ControlPlaneStore::open(db)
+                    .map_err(|error| PluginRuntimeError::PersistentApproval(error.to_string()))?;
+                let request = store.get_approval(approval_id)
+                    .map_err(|error| PluginRuntimeError::PersistentApproval(error.to_string()))?
+                    .ok_or_else(|| PluginRuntimeError::PersistentApproval("approval not found".into()))?;
+                if request.status != ApprovalStatus::Approved {
+                    return Err(PluginRuntimeError::PersistentApproval(
+                        format!("approval {} is not approved", approval_id)
+                    ));
+                }
+            }
         }
         for mapped in &capability.mapped_core_capabilities {
             match self.policy.evaluate(mapped.clone(), capability.risk) {
@@ -116,6 +143,19 @@ impl PluginExecutor {
                 .or_insert_with(|| CircuitBreaker::new(3, 30));
             if !breaker.allow(Utc::now()) {
                 return Err(PluginRuntimeError::CircuitOpen(call.plugin_id.clone()));
+            }
+        }
+
+        if let Some(db) = &self.config.control_plane_db {
+            if let Some(budget) = call.input.get("_budget").and_then(Value::as_object) {
+                let budget_id = budget.get("id").and_then(Value::as_str)
+                    .ok_or_else(|| PluginRuntimeError::Budget("_budget.id is required".into()))?;
+                let amount = budget.get("amount_microusd").and_then(Value::as_i64)
+                    .ok_or_else(|| PluginRuntimeError::Budget("_budget.amount_microusd is required".into()))?;
+                let store = ControlPlaneStore::open(db)
+                    .map_err(|error| PluginRuntimeError::Budget(error.to_string()))?;
+                store.reserve_budget(budget_id, Utc::now().date_naive(), amount)
+                    .map_err(|error| PluginRuntimeError::Budget(error.to_string()))?;
             }
         }
 
