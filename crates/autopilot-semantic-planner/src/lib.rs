@@ -547,6 +547,7 @@ impl WorkflowStep {
 pub struct WorkflowPlan {
     pub goal: String,
     pub steps: Vec<WorkflowStep>,
+    pub unresolved_objectives: Vec<String>,
     pub ready: bool,
 }
 
@@ -561,6 +562,7 @@ impl AdaptiveWorkflowSynthesizer {
     ) -> Result<WorkflowPlan, SemanticError> {
         let clauses = split_goal(goal);
         let mut steps = Vec::new();
+        let mut unresolved_objectives = Vec::new();
 
         for clause in &clauses {
             let routes = graph.route_goal(clause, 20);
@@ -569,9 +571,18 @@ impl AdaptiveWorkflowSynthesizer {
                     .is_some_and(|manifest| manifest.input_contract(&route.capability).is_some()))
                 .cloned()
                 .or_else(|| routes.into_iter().next());
-            let Some(route) = selected else { continue };
-            let Some(manifest) = registry.get(&route.provider) else { continue };
-            let Some(capability) = manifest.capability(&route.capability) else { continue };
+            let Some(route) = selected else {
+                unresolved_objectives.push(clause.clone());
+                continue;
+            };
+            let Some(manifest) = registry.get(&route.provider) else {
+                unresolved_objectives.push(clause.clone());
+                continue;
+            };
+            let Some(capability) = manifest.capability(&route.capability) else {
+                unresolved_objectives.push(clause.clone());
+                continue;
+            };
             let declared = manifest.input_contract(&route.capability).cloned();
             let contract_declared = declared.is_some();
             let contract = declared.unwrap_or_else(|| serde_json::json!({
@@ -603,8 +614,8 @@ impl AdaptiveWorkflowSynthesizer {
         }
 
         if steps.is_empty() { return Err(SemanticError::EmptyWorkflow); }
-        let ready = steps.iter().all(WorkflowStep::ready);
-        Ok(WorkflowPlan { goal: goal.into(), steps, ready })
+        let ready = unresolved_objectives.is_empty() && steps.iter().all(WorkflowStep::ready);
+        Ok(WorkflowPlan { goal: goal.into(), steps, unresolved_objectives, ready })
     }
 }
 
@@ -768,6 +779,50 @@ mod tests {
         };
         assert!(step.ready());
         assert!(step.requires_runtime_mapping());
+    }
+
+    #[test]
+    fn partial_workflow_is_not_ready() {
+        let mut registry = PluginRegistry::default();
+        let manifest = PluginManifest {
+            schema: PLUGIN_SCHEMA_V1.into(),
+            id: "memory".into(),
+            name: "memory".into(),
+            version:"1.0.0".into(),
+            kind:PluginKind::Memory,
+            provider:"test".into(),
+            capabilities:vec![PluginCapability {
+                name:"memory.search".into(),
+                risk:RiskClass::Low,
+                requires_approval:false,
+                mapped_core_capabilities:BTreeSet::new(),
+            }],
+            endpoints:vec![],
+            tags:["memory".to_string()].into_iter().collect(),
+            requires:BTreeSet::new(),
+            enabled_by_default:false,
+            adapter:None,
+            input_contracts:BTreeMap::from([(
+                "memory.search".into(),
+                serde_json::json!({
+                    "type":"object",
+                    "properties":{"query":{"type":"string"}},
+                    "required":["query"]
+                })
+            )]),
+        };
+        registry.register(manifest).unwrap();
+        let mut graph=CapabilityGraph::default();
+        graph.attach_plugins(&registry);
+        let plan=AdaptiveWorkflowSynthesizer::synthesize(
+            "найди в памяти клиента → телепортируй его",
+            &graph,
+            &registry,
+            &MappingContext::default(),
+        ).unwrap();
+        assert!(!plan.ready);
+        assert_eq!(plan.steps.len(),1);
+        assert_eq!(plan.unresolved_objectives,vec!["телепортируй его"]);
     }
 
     #[test]
