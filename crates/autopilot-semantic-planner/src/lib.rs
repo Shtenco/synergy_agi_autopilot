@@ -583,23 +583,18 @@ pub struct TypedSchemaMatcher;
 
 impl TypedSchemaMatcher {
     pub fn compatible(producer: &Value, consumer: &Value) -> Option<SchemaCompatibility> {
+        if !schema_assignable(producer, consumer, 0) {
+            return None;
+        }
         let p = schema_type(producer);
         let c = schema_type(consumer);
-        let type_match = match (p.as_deref(), c.as_deref()) {
+        match (p.as_deref(), c.as_deref()) {
             (Some(a), Some(b)) if a == b => Some(SchemaCompatibility::Exact),
             (Some("integer"), Some("number")) => Some(SchemaCompatibility::Widening),
-            (None, _) | (_, None) => Some(SchemaCompatibility::Widening),
+            (_, None) => Some(SchemaCompatibility::Widening),
+            (None, Some(_)) => None,
             _ => None,
-        }?;
-
-        let consumer_format = consumer.get("format").and_then(Value::as_str);
-        let producer_format = producer.get("format").and_then(Value::as_str);
-        if let Some(required_format) = consumer_format {
-            if producer_format != Some(required_format) {
-                return None;
-            }
         }
-        Some(type_match)
     }
 
     pub fn match_field(
@@ -629,6 +624,94 @@ impl TypedSchemaMatcher {
         matches.sort_by(|a,b| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0)));
         matches
     }
+}
+
+fn schema_assignable(producer: &Value, consumer: &Value, depth: usize) -> bool {
+    if depth >= 10 { return false; }
+    let producer = resolve_local_schema_refs(producer);
+    let consumer = resolve_local_schema_refs(consumer);
+
+    if let Some(constant) = producer.get("const") {
+        return JsonContractValidator::validate(&consumer, constant).is_empty();
+    }
+    if let Some(values) = producer.get("enum").and_then(Value::as_array) {
+        if !values.iter().all(|value| JsonContractValidator::validate(&consumer, value).is_empty()) {
+            return false;
+        }
+    }
+
+    let p = schema_type(&producer);
+    let c = schema_type(&consumer);
+    match (p.as_deref(), c.as_deref()) {
+        (_, None) => {}
+        (Some(a), Some(b)) if a == b => {}
+        (Some("integer"), Some("number")) => {}
+        _ => return false,
+    }
+
+    if let Some(required_format) = consumer.get("format").and_then(Value::as_str) {
+        if producer.get("format").and_then(Value::as_str) != Some(required_format) {
+            return false;
+        }
+    }
+
+    if matches!(c.as_deref(), Some("number") | Some("integer")) {
+        if let Some(cmin) = consumer.get("minimum").and_then(Value::as_f64) {
+            let Some(pmin) = producer.get("minimum").and_then(Value::as_f64) else { return false };
+            if pmin < cmin { return false; }
+        }
+        if let Some(cmax) = consumer.get("maximum").and_then(Value::as_f64) {
+            let Some(pmax) = producer.get("maximum").and_then(Value::as_f64) else { return false };
+            if pmax > cmax { return false; }
+        }
+    }
+
+    if c.as_deref() == Some("string") {
+        if let Some(cmin) = consumer.get("minLength").and_then(Value::as_u64) {
+            let Some(pmin) = producer.get("minLength").and_then(Value::as_u64) else { return false };
+            if pmin < cmin { return false; }
+        }
+        if let Some(cmax) = consumer.get("maxLength").and_then(Value::as_u64) {
+            let Some(pmax) = producer.get("maxLength").and_then(Value::as_u64) else { return false };
+            if pmax > cmax { return false; }
+        }
+    }
+
+    if c.as_deref() == Some("array") {
+        if let Some(cmin) = consumer.get("minItems").and_then(Value::as_u64) {
+            let Some(pmin) = producer.get("minItems").and_then(Value::as_u64) else { return false };
+            if pmin < cmin { return false; }
+        }
+        if let Some(cmax) = consumer.get("maxItems").and_then(Value::as_u64) {
+            let Some(pmax) = producer.get("maxItems").and_then(Value::as_u64) else { return false };
+            if pmax > cmax { return false; }
+        }
+        if let Some(consumer_items) = consumer.get("items") {
+            let Some(producer_items) = producer.get("items") else { return false };
+            if !schema_assignable(producer_items, consumer_items, depth + 1) {
+                return false;
+            }
+        }
+    }
+
+    if c.as_deref() == Some("object") {
+        let consumer_required = required_fields(&consumer);
+        let producer_properties = producer.get("properties").and_then(Value::as_object);
+        let consumer_properties = consumer.get("properties").and_then(Value::as_object);
+        for field in consumer_required {
+            let Some(p_schema) = producer_properties.and_then(|properties| properties.get(&field)) else {
+                return false;
+            };
+            let Some(c_schema) = consumer_properties.and_then(|properties| properties.get(&field)) else {
+                continue;
+            };
+            if !schema_assignable(p_schema, c_schema, depth + 1) {
+                return false;
+            }
+        }
+    }
+
+    true
 }
 
 fn schema_type(schema: &Value) -> Option<String> {
@@ -1225,6 +1308,38 @@ mod tests {
         assert_eq!(plan.execution_layers,vec![vec!["proposal".to_string()],vec!["send".to_string()]]);
         assert!(plan.typed_edges.iter().any(|edge| edge.from_path=="recipient_email" && edge.to_field=="to"));
         assert!(plan.typed_edges.iter().any(|edge| edge.from_path=="message" && edge.to_field=="body"));
+    }
+
+    #[test]
+    fn typed_matcher_rejects_unknown_producer_type() {
+        assert!(TypedSchemaMatcher::compatible(
+            &serde_json::json!({}),
+            &serde_json::json!({"type":"string"})
+        ).is_none());
+    }
+
+    #[test]
+    fn typed_matcher_checks_nested_object_requirements() {
+        let producer=serde_json::json!({
+            "type":"object",
+            "properties":{"email":{"type":"string","format":"email"}},
+            "required":["email"]
+        });
+        let compatible=serde_json::json!({
+            "type":"object",
+            "properties":{"email":{"type":"string","format":"email"}},
+            "required":["email"]
+        });
+        let incompatible=serde_json::json!({
+            "type":"object",
+            "properties":{
+                "email":{"type":"string","format":"email"},
+                "name":{"type":"string"}
+            },
+            "required":["email","name"]
+        });
+        assert!(TypedSchemaMatcher::compatible(&producer,&compatible).is_some());
+        assert!(TypedSchemaMatcher::compatible(&producer,&incompatible).is_none());
     }
 
     #[test]
