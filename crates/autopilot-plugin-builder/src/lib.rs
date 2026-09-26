@@ -1377,9 +1377,9 @@ mod tests {
         };
         let contract = derive_input_contract(&source);
         assert_eq!(contract["properties"]["id"]["x-location"], "path");
-        assert!(contract["required"].as_array().unwrap().iter().any(|v| v == "id"));
-        assert!(contract["required"].as_array().unwrap().iter().any(|v| v == "body"));
-        assert_eq!(contract["properties"]["body"]["required"][0], "name");
+        assert!(contract["required"].as_array().unwrap().iter().any(|v| v.as_str() == Some("id")));
+        assert!(contract["required"].as_array().unwrap().iter().any(|v| v.as_str() == Some("body")));
+        assert_eq!(contract["properties"]["body"]["required"][0].as_str(), Some("name"));
     }
 
     #[test]
