@@ -181,10 +181,26 @@ fn map_field(
         evidence.push(MappingEvidence { field: field.into(), source: "memory".into(), confidence: 92 });
         return Some(value);
     }
+    for alias in context_aliases(field) {
+        if let Some(value) = find_key_recursive(&context.memory, alias) {
+            evidence.push(MappingEvidence { field: field.into(), source: format!("memory.alias:{alias}"), confidence: 78 });
+            return Some(value);
+        }
+    }
     for (index, output) in context.prior_outputs.iter().enumerate().rev() {
         if let Some(value) = find_key_recursive(output, field) {
             evidence.push(MappingEvidence { field: field.into(), source: format!("steps.{index}"), confidence: 95 });
             return Some(value);
+        }
+        for alias in context_aliases(field) {
+            if let Some(value) = find_key_recursive(output, alias) {
+                evidence.push(MappingEvidence {
+                    field: field.into(),
+                    source: format!("steps.{index}.alias:{alias}"),
+                    confidence: 82,
+                });
+                return Some(value);
+            }
         }
     }
     if let Some(value) = schema.get("const") {
@@ -231,6 +247,19 @@ fn map_field(
         if let Some(url) = extract_url(goal) {
             evidence.push(MappingEvidence { field: field.into(), source: "goal.url".into(), confidence: 98 });
             return Some(Value::String(url));
+        }
+    }
+    if matches_alias(&normalized, &["path","file_path","filepath","путь","файл"]) {
+        if let Some(value) = extract_after_alias(goal, &["path","путь","файл"]) {
+            let token = value.split_whitespace().next().unwrap_or("").trim_matches('"');
+            if !token.is_empty() {
+                evidence.push(MappingEvidence { field: field.into(), source: "goal.path".into(), confidence: 84 });
+                return Some(Value::String(token.to_string()));
+            }
+        }
+        if let Some(quoted) = extract_quoted(goal) {
+            evidence.push(MappingEvidence { field: field.into(), source: "goal.quoted_path".into(), confidence: 78 });
+            return Some(Value::String(quoted));
         }
     }
     if matches_alias(&normalized, &["query","search","q","поиск","запрос","prompt","goal","instruction","цель","задача"]) {
@@ -296,6 +325,24 @@ fn normalize_field(value: &str) -> String {
 
 fn matches_alias(field: &str, aliases: &[&str]) -> bool {
     aliases.iter().any(|alias| field == *alias || field.ends_with(&format!("_{alias}")))
+}
+
+fn context_aliases(field: &str) -> &'static [&'static str] {
+    match normalize_field(field).as_str() {
+        "to" | "recipient" => &["email", "email_address", "recipient"],
+        "email" | "email_address" => &["to", "recipient"],
+        "body" => &["message", "text", "content", "proposal"],
+        "message" => &["body", "text", "content", "proposal"],
+        "subject" => &["title"],
+        "title" => &["subject", "name"],
+        "client_id" => &["lead_id", "customer_id", "id"],
+        "lead_id" => &["client_id", "customer_id", "id"],
+        "user_id" => &["id"],
+        "campaign_id" => &["id"],
+        "url" => &["link", "website", "site"],
+        "path" => &["file_path", "filepath"],
+        _ => &[],
+    }
 }
 
 fn find_key_recursive(value: &Value, key: &str) -> Option<Value> {
