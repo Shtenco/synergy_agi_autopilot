@@ -345,12 +345,63 @@ impl SandboxQualifier {
                 passed: true,
                 detail: "OpenAPI uses trusted Connector Gateway; mutating external requests are never auto-probed".into(),
             },
-            AdapterSource::McpStdio { command, args, .. } => {
-                self.probe_program(command, args, "MCP").await
+            AdapterSource::McpStdio { command, args, tool } => {
+                self.probe_mcp(command, args, tool).await
             }
             AdapterSource::Cli { program, args } => {
                 self.probe_program(program, args, "CLI").await
             }
+        }
+    }
+
+    async fn probe_mcp(&self, command: &str, args: &[String], tool: &str) -> QualificationCheck {
+        if !self.allowed_programs.contains(command) {
+            return QualificationCheck {
+                name: "sandbox_probe".into(),
+                passed: false,
+                detail: format!("program is not in sandbox allowlist: {command}"),
+            };
+        }
+        let initialize = serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"synergy-plugin-qualifier","version":"0.1.0"}}
+        });
+        let initialized = serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized","params":{}});
+        let list = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}});
+        let stdin = format!("{}\n{}\n{}\n", initialize, initialized, list);
+        let spec = CommandSpec::new(command.to_string())
+            .args(args.to_vec())
+            .profile(ExecutionProfile::ReadOnlyWorkspace)
+            .stdin_data(stdin);
+        match self.runtime.execute(spec).await {
+            Ok(result) if result.exit_code == 0 => {
+                let mut found = false;
+                for line in result.stdout.lines() {
+                    let Ok(value) = serde_json::from_str::<Value>(line) else { continue };
+                    if value.get("id") != Some(&Value::from(2)) { continue; }
+                    found = value.pointer("/result/tools").and_then(Value::as_array)
+                        .is_some_and(|tools| tools.iter().any(|item| item.get("name").and_then(Value::as_str) == Some(tool)));
+                }
+                QualificationCheck {
+                    name: "sandbox_probe".into(),
+                    passed: found,
+                    detail: if found {
+                        format!("MCP tool exists in sandbox tools/list: {tool}")
+                    } else {
+                        format!("MCP tools/list did not expose requested tool: {tool}")
+                    },
+                }
+            }
+            Ok(result) => QualificationCheck {
+                name: "sandbox_probe".into(),
+                passed: false,
+                detail: format!("MCP probe exit={} stderr={}", result.exit_code, result.stderr),
+            },
+            Err(error) => QualificationCheck {
+                name: "sandbox_probe".into(),
+                passed: false,
+                detail: error.to_string(),
+            },
         }
     }
 
