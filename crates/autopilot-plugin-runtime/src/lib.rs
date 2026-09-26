@@ -529,7 +529,7 @@ impl PluginExecutor {
                     "header_params": buckets.header,
                     "body": buckets.body,
                 });
-                if let Some(oauth2) = call.input.get("oauth2") {
+                if let Some(oauth2) = call.input.get("_oauth2").or_else(|| call.input.get("oauth2")) {
                     payload["oauth2"] = oauth2.clone();
                 }
                 let output = self.http_json(
