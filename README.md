@@ -16,6 +16,7 @@ See:
 - `docs/M6_FULL_AUTOMATION_STATUS.md`
 - `docs/M7_CAPABILITY_GRAPH_STATUS.md`
 - `docs/M8_SELF_BUILDING_PLUGIN_FABRIC_STATUS.md`
+- `docs/M9_SEMANTIC_ARGUMENT_MAPPER_STATUS.md`
 - `docs/architecture/plugin-fabric-v1.md`
 
 Current convergence line also includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, and a Capability Graph seeded from all 73 currently accessible Shtenco repositories.
@@ -284,6 +285,30 @@ open-autopilot universal-goal
 Generated MCP/CLI programs require an explicit runtime executable allowlist, and Low/Medium execution requires a read-only isolating runtime.
 
 Canonical qualification command:
+
+```powershell
+.\scripts\verify-autopilot.ps1
+```
+
+
+## M9 — Universal Semantic Argument Mapper + Adaptive Workflows
+
+M9 adds transport-neutral `input_contracts`, deterministic semantic argument mapping, dry-run JSON-contract validation, runtime remapping from prior step outputs, and multi-step workflow synthesis.
+
+Core commands:
+
+```text
+open-autopilot argument-map
+open-autopilot workflow-plan
+open-autopilot workflow-run
+open-autopilot universal-goal
+```
+
+`universal-goal` now requires typed provider coverage for every workflow clause. Missing providers are self-built per clause through OpenAPI, MCP or declarative CLI discovery before workflow synthesis.
+
+The old untyped fallback is intentionally removed from universal mode.
+
+Canonical qualification:
 
 ```powershell
 .\scripts\verify-autopilot.ps1
