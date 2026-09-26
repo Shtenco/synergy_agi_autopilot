@@ -71,6 +71,9 @@ enum Commands {
         #[arg(long)] control_db: Option<PathBuf>,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
         #[arg(long = "allow-generated-program")] allow_generated_program: Vec<String>,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long)] wsl_distro: Option<String>,
     },
     UniversalGoal {
         #[arg(long)] goal: String,
@@ -83,6 +86,9 @@ enum Commands {
         #[arg(long)] control_db: Option<PathBuf>,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
         #[arg(long = "allow-generated-program")] allow_generated_program: Vec<String>,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long)] wsl_distro: Option<String>,
     },
     AutomationAdd {
         #[arg(long)] db: PathBuf,
@@ -129,6 +135,9 @@ enum Commands {
         #[arg(long)] control_db: Option<PathBuf>,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
         #[arg(long = "allow-generated-program")] allow_generated_program: Vec<String>,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long)] wsl_distro: Option<String>,
     },
     PluginGoal {
         #[arg(long)] goal: String,
@@ -137,6 +146,9 @@ enum Commands {
         #[arg(long)] control_db: Option<PathBuf>,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
         #[arg(long = "allow-generated-program")] allow_generated_program: Vec<String>,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long)] wsl_distro: Option<String>,
     },
     E2eSales {
         #[arg(long)] lead_url: String,
@@ -460,6 +472,17 @@ fn fleet_candidates(default_provider: String, default_model: Option<String>, rou
     }).collect())
 }
 
+fn build_plugin_runtime(
+    kind: &str,
+    workspace: Option<&Path>,
+    docker_image: Option<&str>,
+    wsl_distro: Option<&str>,
+) -> Result<Arc<dyn RuntimeAdapter>, String> {
+    let fallback = std::env::current_dir().map_err(|error| error.to_string())?;
+    let root = workspace.unwrap_or(&fallback);
+    build_runtime(kind, root, docker_image, wsl_distro)
+}
+
 fn build_runtime(kind: &str, workspace: &Path, docker_image: Option<&str>, wsl_distro: Option<&str>) -> Result<Arc<dyn RuntimeAdapter>, String> {
     match kind.to_ascii_lowercase().as_str() {
         "native" | "windows" => Ok(Arc::new(NativeRuntime::default())),
@@ -639,9 +662,15 @@ async fn main() -> Result<(), String> {
             println!("promoted_manifest={}", path.display());
             println!("Set AUTOPILOT_GENERATED_PLUGINS to the generated plugin root to load promoted manifests.");
         },
-        Commands::GraphGoal { goal, max_routes, workspace, control_db, allow_env, allow_generated_program } => {
+        Commands::GraphGoal { goal, max_routes, workspace, control_db, allow_env, allow_generated_program, runtime, docker_image, wsl_distro } => {
             let graph = Arc::new(initial_capability_graph()?);
             let registry = initial_plugin_registry()?;
+            let execution_runtime = build_plugin_runtime(
+                &runtime,
+                workspace.as_deref(),
+                docker_image.as_deref(),
+                wsl_distro.as_deref(),
+            )?;
             let mut config = PluginRuntimeConfig::default();
             config.local_workspace = workspace;
             config.control_plane_db = control_db;
@@ -660,7 +689,7 @@ async fn main() -> Result<(), String> {
             let executor = Arc::new(PluginExecutor::new(
                 registry,
                 PolicyEngine::default(),
-                Arc::new(NativeRuntime::default()),
+                execution_runtime,
                 config,
             ));
             let audit = Arc::new(InMemoryAuditStore::default());
@@ -676,7 +705,8 @@ async fn main() -> Result<(), String> {
         },
         Commands::UniversalGoal {
             goal, discovery_root, base_url, quarantine, generated_plugins,
-            max_routes, workspace, control_db, allow_env, allow_generated_program
+            max_routes, workspace, control_db, allow_env, allow_generated_program,
+            runtime, docker_image, wsl_distro
         } => {
             let mut graph = initial_capability_graph()?;
             let mut registry = initial_plugin_registry()?;
@@ -719,6 +749,12 @@ async fn main() -> Result<(), String> {
                 }
             }
 
+            let execution_runtime = build_plugin_runtime(
+                &runtime,
+                workspace.as_deref(),
+                docker_image.as_deref(),
+                wsl_distro.as_deref(),
+            )?;
             let mut config = PluginRuntimeConfig::default();
             config.local_workspace = workspace;
             config.control_plane_db = control_db;
@@ -740,7 +776,7 @@ async fn main() -> Result<(), String> {
             let executor = Arc::new(PluginExecutor::new(
                 registry,
                 PolicyEngine::default(),
-                Arc::new(NativeRuntime::default()),
+                execution_runtime,
                 config,
             ));
             let audit = Arc::new(InMemoryAuditStore::default());
@@ -810,9 +846,15 @@ async fn main() -> Result<(), String> {
                 .map_err(|error| error.to_string())?;
             println!("budget_reserved={}\tamount_microusd={}\tremaining_microusd={}", id, amount_microusd.max(0), remaining);
         },
-        Commands::PluginCall { plugin, capability, input_json, approve, workspace, control_db, allow_env, allow_generated_program } => {
+        Commands::PluginCall { plugin, capability, input_json, approve, workspace, control_db, allow_env, allow_generated_program, runtime, docker_image, wsl_distro } => {
             let registry = initial_plugin_registry()?;
             let input = serde_json::from_str(&input_json).map_err(|error| format!("invalid --input-json: {error}"))?;
+            let execution_runtime = build_plugin_runtime(
+                &runtime,
+                workspace.as_deref(),
+                docker_image.as_deref(),
+                wsl_distro.as_deref(),
+            )?;
             let mut config = PluginRuntimeConfig::default();
             config.local_workspace = workspace;
             config.control_plane_db = control_db;
@@ -829,7 +871,7 @@ async fn main() -> Result<(), String> {
             let executor = PluginExecutor::new(
                 registry,
                 PolicyEngine::default(),
-                Arc::new(NativeRuntime::default()),
+                execution_runtime,
                 config,
             );
             let result = executor.execute(PluginCall {
@@ -840,13 +882,19 @@ async fn main() -> Result<(), String> {
             }).await.map_err(|error| error.to_string())?;
             println!("{}", serde_json::to_string_pretty(&result).map_err(|error| error.to_string())?);
         },
-        Commands::PluginGoal { goal, plan, workspace, control_db, allow_env, allow_generated_program } => {
+        Commands::PluginGoal { goal, plan, workspace, control_db, allow_env, allow_generated_program, runtime, docker_image, wsl_distro } => {
             let registry = initial_plugin_registry()?;
             let raw = fs::read_to_string(&plan).map_err(|error| format!("cannot read plan {}: {error}", plan.display()))?;
             let steps: Vec<PluginGoalStep> = serde_json::from_str(&raw)
                 .map_err(|error| format!("invalid plugin goal plan {}: {error}", plan.display()))?;
             if steps.is_empty() { return Err("plugin goal plan must contain at least one step".into()); }
 
+            let execution_runtime = build_plugin_runtime(
+                &runtime,
+                workspace.as_deref(),
+                docker_image.as_deref(),
+                wsl_distro.as_deref(),
+            )?;
             let mut config = PluginRuntimeConfig::default();
             config.local_workspace = workspace;
             config.control_plane_db = control_db;
@@ -866,7 +914,7 @@ async fn main() -> Result<(), String> {
             let executor = Arc::new(PluginExecutor::new(
                 registry,
                 PolicyEngine::default(),
-                Arc::new(NativeRuntime::default()),
+                execution_runtime,
                 config,
             ));
             let audit = Arc::new(InMemoryAuditStore::default());
