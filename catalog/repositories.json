@@ -2,7 +2,7 @@
   "schema": "synergy.repository-capability-catalog.v1",
   "owner": "Shtenco",
   "repository_count": 73,
-  "generated_from": "GitHub repository metadata; enrichment script can add README/manifests",
+  "generated_from": "GitHub repository metadata + batched README enrichment",
   "repositories": [
     {
       "name": "shtenco.github.io",
@@ -25,17 +25,25 @@
       "visibility": "public",
       "archived": false,
       "tags": [
+        "apps",
+        "blockchain",
+        "finance",
         "science",
         "trading"
       ],
       "capabilities": [
+        "app.interface",
+        "finance.analyze",
         "trading.analyze",
         "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -45,16 +53,29 @@
       "visibility": "public",
       "archived": false,
       "tags": [
+        "ai",
+        "apps",
+        "finance",
+        "network",
+        "runtime",
+        "science",
         "trading"
       ],
       "capabilities": [
+        "app.interface",
+        "finance.analyze",
+        "intelligence.infer",
+        "network.transport",
         "trading.analyze",
         "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -64,16 +85,29 @@
       "visibility": "public",
       "archived": false,
       "tags": [
+        "ai",
+        "apps",
+        "business",
+        "finance",
+        "runtime",
+        "science",
         "trading"
       ],
       "capabilities": [
+        "app.interface",
+        "business.operate",
+        "finance.analyze",
+        "intelligence.infer",
         "trading.analyze",
         "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -83,17 +117,31 @@
       "visibility": "public",
       "archived": false,
       "tags": [
+        "ai",
+        "apps",
+        "blockchain",
+        "finance",
+        "network",
         "runtime",
+        "science",
         "trading"
       ],
       "capabilities": [
+        "app.interface",
+        "blockchain.submit",
+        "finance.analyze",
+        "intelligence.infer",
+        "network.transport",
         "trading.analyze",
         "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -102,12 +150,27 @@
       "default_branch": "main",
       "visibility": "public",
       "archived": false,
-      "tags": [],
-      "capabilities": [],
-      "transports": [],
+      "tags": [
+        "ai",
+        "apps",
+        "finance",
+        "runtime",
+        "trading"
+      ],
+      "capabilities": [
+        "app.interface",
+        "finance.analyze",
+        "intelligence.infer",
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -117,15 +180,21 @@
       "visibility": "public",
       "archived": false,
       "tags": [
+        "apps",
+        "runtime",
         "trading"
       ],
       "capabilities": [
-        "trading.analyze"
+        "app.interface",
+        "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -135,15 +204,31 @@
       "visibility": "public",
       "archived": false,
       "tags": [
+        "ai",
+        "apps",
+        "finance",
+        "network",
+        "runtime",
+        "science",
         "trading"
       ],
       "capabilities": [
-        "trading.analyze"
+        "app.interface",
+        "finance.analyze",
+        "intelligence.infer",
+        "memory.search",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "cli",
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -154,16 +239,28 @@
       "archived": false,
       "tags": [
         "ai",
+        "apps",
+        "blockchain",
+        "network",
         "runtime",
+        "science",
         "trading"
       ],
       "capabilities": [
-        "trading.analyze"
+        "app.interface",
+        "intelligence.infer",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "cli",
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -173,6 +270,7 @@
       "visibility": "private",
       "archived": false,
       "tags": [
+        "runtime",
         "trading"
       ],
       "capabilities": [
@@ -181,7 +279,8 @@
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -191,15 +290,20 @@
       "visibility": "private",
       "archived": false,
       "tags": [
+        "apps",
         "runtime"
       ],
       "capabilities": [
+        "app.interface",
         "computer.execute"
       ],
-      "transports": [],
+      "transports": [
+        "cli"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -209,15 +313,26 @@
       "visibility": "private",
       "archived": false,
       "tags": [
-        "ai"
+        "ai",
+        "apps",
+        "blockchain",
+        "runtime",
+        "science"
       ],
       "capabilities": [
-        "intelligence.infer"
+        "app.interface",
+        "blockchain.submit",
+        "computer.execute",
+        "intelligence.infer",
+        "memory.search"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -226,14 +341,13 @@
       "default_branch": "main",
       "visibility": "private",
       "archived": false,
-      "tags": [
-        "ai"
-      ],
+      "tags": [],
       "capabilities": [],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -244,15 +358,17 @@
       "archived": false,
       "tags": [
         "ai",
+        "runtime",
         "trading"
       ],
-      "capabilities": [
-        "trading.analyze"
+      "capabilities": [],
+      "transports": [
+        "cli"
       ],
-      "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1296,5 +1412,6 @@
         "github-metadata:name"
       ]
     }
-  ]
+  ],
+  "readme_enriched_count": 13
 }
