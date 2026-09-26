@@ -31,6 +31,12 @@
       "mapped_core_capabilities": []
     },
     {
+      "name": "business.sales.compose_offer",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
       "name": "business.verify.evidence",
       "risk": "Low",
       "requires_approval": false,
@@ -184,6 +190,327 @@
         "capability"
       ],
       "additionalProperties": false
+    },
+    "business.sales.compose_offer": {
+      "type": "object",
+      "properties": {
+        "product": {
+          "type": "string",
+          "default": "продукт"
+        },
+        "value": {
+          "type": "string",
+          "default": "полезный результат"
+        },
+        "name": {
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "output_contracts": {
+    "business.ceo.plan": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "succeeded"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "goal": {
+              "type": "string"
+            },
+            "capabilities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "execution_authority": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "goal",
+            "capabilities",
+            "execution_authority"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "status",
+        "result"
+      ],
+      "additionalProperties": true
+    },
+    "business.cfo.analyze": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "succeeded"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "revenue_usd": {
+              "type": "number"
+            },
+            "cost_usd": {
+              "type": "number"
+            },
+            "operating_margin_usd": {
+              "type": "number"
+            },
+            "margin_pct": {
+              "oneOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "authority": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "revenue_usd",
+            "cost_usd",
+            "operating_margin_usd",
+            "authority"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "status",
+        "result"
+      ],
+      "additionalProperties": true
+    },
+    "business.smm.plan": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "succeeded"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "day": {
+                    "type": "integer"
+                  },
+                  "platform": {
+                    "type": "string"
+                  },
+                  "pillar": {
+                    "type": "string"
+                  },
+                  "brief": {
+                    "type": "string"
+                  },
+                  "cta": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "day",
+                  "platform",
+                  "pillar",
+                  "brief",
+                  "cta"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "external_effects": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "schema",
+            "items",
+            "external_effects"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "status",
+        "result"
+      ],
+      "additionalProperties": true
+    },
+    "business.sales.plan": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "succeeded"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "score": {
+              "type": "integer"
+            },
+            "stage": {
+              "type": "string"
+            },
+            "objection": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recommended_next_action": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "score",
+            "stage",
+            "recommended_next_action"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "status",
+        "result"
+      ],
+      "additionalProperties": true
+    },
+    "business.sales.compose_offer": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "succeeded"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "delivery_authority": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "message",
+            "delivery_authority",
+            "note"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "status",
+        "result"
+      ],
+      "additionalProperties": true
+    },
+    "business.verify.evidence": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "succeeded"
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string"
+            },
+            "required": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "present": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "missing": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "verified": {
+              "type": "boolean"
+            },
+            "authority": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema",
+            "required",
+            "present",
+            "missing",
+            "verified",
+            "authority"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "status",
+        "result"
+      ],
+      "additionalProperties": true
     }
   }
 }
