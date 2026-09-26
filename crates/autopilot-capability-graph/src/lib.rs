@@ -75,7 +75,7 @@ fn goal_terms(goal: &str) -> BTreeSet<String> {
         .map(str::to_string)
         .collect::<BTreeSet<_>>();
 
-    let aliases: [(&str, &[&str]); 15] = [
+    let aliases: &[(&str, &[&str])] = &[
         ("клиент", &["sales","crm","lead"]),
         ("лид", &["sales","crm","lead"]),
         ("продаж", &["sales","crm"]),
@@ -91,6 +91,29 @@ fn goal_terms(goal: &str) -> BTreeSet<String> {
         ("памят", &["memory"]),
         ("анализ", &["analyze","analysis"]),
         ("трейд", &["trading","market"]),
+        ("открой", &["navigate","open"]),
+        ("перейди", &["navigate"]),
+        ("navigate", &["navigate"]),
+        ("нажми", &["click"]),
+        ("клик", &["click"]),
+        ("click", &["click"]),
+        ("заполни", &["fill"]),
+        ("fill", &["fill"]),
+        ("скрин", &["screenshot","snapshot"]),
+        ("снимок", &["snapshot","screenshot"]),
+        ("отправ", &["send"]),
+        ("send", &["send"]),
+        ("создай", &["create"]),
+        ("create", &["create"]),
+        ("обнов", &["update"]),
+        ("update", &["update"]),
+        ("удал", &["delete"]),
+        ("delete", &["delete"]),
+        ("прочитай", &["read"]),
+        ("получи", &["read","get"]),
+        ("read", &["read"]),
+        ("найди", &["search","find"]),
+        ("search", &["search"]),
     ];
     let snapshot = terms.clone();
     for term in snapshot {
