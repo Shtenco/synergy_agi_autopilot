@@ -6,15 +6,97 @@
   "kind": "remote_mcp",
   "provider": "Shtenco/synergy_shttps",
   "capabilities": [
-    {"name":"computer.remote.list_dir","risk":"Low","requires_approval":false,"mapped_core_capabilities":["NetworkAccess","ReadWorkspace"]},
-    {"name":"computer.remote.read_file","risk":"Low","requires_approval":false,"mapped_core_capabilities":["NetworkAccess","ReadWorkspace"]},
-    {"name":"computer.remote.run","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess","ExecuteProcess"]}
+    {
+      "name": "computer.remote.list_dir",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "NetworkAccess",
+        "ReadWorkspace"
+      ]
+    },
+    {
+      "name": "computer.remote.read_file",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "NetworkAccess",
+        "ReadWorkspace"
+      ]
+    },
+    {
+      "name": "computer.remote.run",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": [
+        "NetworkAccess",
+        "ExecuteProcess"
+      ]
+    }
   ],
   "endpoints": [
-    {"transport":"mcp_stdio","address":"synergy-mcp-gateway"},
-    {"transport":"shttps_stcp","address":"synergy.remote.mcp.v1"}
+    {
+      "transport": "mcp_stdio",
+      "address": "synergy-mcp-gateway"
+    },
+    {
+      "transport": "shttps_stcp",
+      "address": "synergy.remote.mcp.v1"
+    }
   ],
-  "tags": ["computer","remote","mcp","shttps","stcp"],
+  "tags": [
+    "computer",
+    "remote",
+    "mcp",
+    "shttps",
+    "stcp"
+  ],
   "requires": [],
-  "enabled_by_default": false
+  "enabled_by_default": false,
+  "input_contracts": {
+    "computer.remote.list_dir": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "default": "."
+        }
+      },
+      "additionalProperties": false
+    },
+    "computer.remote.read_file": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "computer.remote.run": {
+      "type": "object",
+      "properties": {
+        "argv": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "cwd": {
+          "type": "string",
+          "default": "."
+        }
+      },
+      "required": [
+        "argv"
+      ],
+      "additionalProperties": false
+    }
+  }
 }
