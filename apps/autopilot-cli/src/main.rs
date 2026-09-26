@@ -947,14 +947,50 @@ async fn main() -> Result<(), String> {
             }
 
             let executor = Arc::new(PluginExecutor::new(
-                registry,
+                registry.clone(),
                 PolicyEngine::default(),
                 execution_runtime,
                 config,
             ));
             let audit = Arc::new(InMemoryAuditStore::default());
-            let engine = GraphGoalEngine::new(Arc::new(graph), audit.clone(), executor, max_routes);
-            let summary = engine.run(goal).await.map_err(|error| error.to_string())?;
+            let semantic_context = MappingContext {
+                goal: goal.clone(),
+                hints: BTreeMap::new(),
+                memory: serde_json::Value::Null,
+                prior_outputs: Vec::new(),
+            };
+
+            let summary = match AdaptiveWorkflowSynthesizer::synthesize(
+                &goal,
+                &graph,
+                &registry,
+                &semantic_context,
+            ) {
+                Ok(plan) => {
+                    println!(
+                        "semantic_workflow={}\n",
+                        serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?
+                    );
+                    if !plan.ready {
+                        return Err(
+                            "M9 workflow is not ready: resolve missing contracts/arguments before execution".into()
+                        );
+                    }
+                    if let Some(step) = plan.steps.iter().find(|step| step.requires_approval) {
+                        return Err(format!(
+                            "M9 workflow step {} ({}/{}) requires explicit approval; use workflow-run --approve-step {}",
+                            step.id, step.plugin_id, step.capability, step.id
+                        ));
+                    }
+                    let steps = workflow_to_plugin_steps(&plan, &BTreeSet::new(), &BTreeMap::new())?;
+                    let engine = PluginGoalEngine::new(audit.clone(), executor.clone(), steps, 0);
+                    engine.run(goal.clone()).await.map_err(|error| error.to_string())?
+                }
+                Err(_) => {
+                    let engine = GraphGoalEngine::new(Arc::new(graph), audit.clone(), executor, max_routes);
+                    engine.run(goal.clone()).await.map_err(|error| error.to_string())?
+                }
+            };
             println!(
                 "UNIVERSAL_GOAL\nfinal_state={:?}\nevidence={}\naudit_events={}\nblocked_by_policy={}",
                 summary.final_state,
