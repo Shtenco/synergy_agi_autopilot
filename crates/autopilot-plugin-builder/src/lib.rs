@@ -98,6 +98,16 @@ impl SemanticGapDetector {
         Some(Self::plan_for_gap(graph, gap))
     }
 
+    pub fn typed_gaps_for_goal(
+        graph: &CapabilityGraph,
+        registry: &PluginRegistry,
+        goal: &str,
+    ) -> Vec<SemanticGap> {
+        split_objectives(goal).into_iter()
+            .filter_map(|objective| Self::detect_typed(graph, registry, &objective))
+            .collect()
+    }
+
     fn plan_for_gap(graph: &CapabilityGraph, gap: SemanticGap) -> SelfBuildPlan {
         let query = autopilot_capability_graph::CapabilityQuery {
             capability: Some(gap.suggested_capability.clone()),
@@ -132,6 +142,21 @@ impl SemanticGapDetector {
             auto_execution_allowed: false,
         }
     }
+}
+
+fn split_objectives(goal: &str) -> Vec<String> {
+    let normalized = goal
+        .replace("→", "\n")
+        .replace("->", "\n")
+        .replace(" затем ", "\n")
+        .replace(" потом ", "\n")
+        .replace(" and then ", "\n")
+        .replace(';', "\n");
+    normalized.lines()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 fn tokenize(goal: &str) -> BTreeSet<String> {
