@@ -352,6 +352,7 @@ impl PluginExecutor {
             "business.cfo.analyze" => "cfo.analyze_budget",
             "business.smm.plan" => "smm.content_plan",
             "business.sales.plan" => "sales.qualify",
+            "business.sales.compose_offer" => "sales.compose_offer",
             "business.verify.evidence" => "verifier.check_evidence",
             "business.external.publish" => call.input.get("capability").and_then(Value::as_str)
                 .ok_or_else(|| PluginRuntimeError::Http("external publish requires input.capability".into()))?,
