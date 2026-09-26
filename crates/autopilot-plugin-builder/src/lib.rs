@@ -1065,6 +1065,104 @@ impl BuildDiscovery for FilesystemMcpDiscovery {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct FilesystemCliDescriptorDiscovery {
+    root: PathBuf,
+    max_files: usize,
+}
+
+impl FilesystemCliDescriptorDiscovery {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into(), max_files: 5000 }
+    }
+
+    fn descriptors(&self) -> Vec<PathBuf> {
+        fn walk(root: &Path, out: &mut Vec<PathBuf>, left: &mut usize) {
+            if *left == 0 { return; }
+            let Ok(entries) = fs::read_dir(root) else { return };
+            for entry in entries.flatten() {
+                if *left == 0 { break; }
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|v| v.to_str()).unwrap_or("");
+                    if matches!(name, ".git" | "node_modules" | "target" | ".venv" | "venv" | "dist" | "build") {
+                        continue;
+                    }
+                    walk(&path, out, left);
+                } else if path.is_file() {
+                    *left -= 1;
+                    let name = path.file_name().and_then(|v| v.to_str()).unwrap_or("");
+                    if matches!(name, "synergy.cli.json" | "cli-capabilities.json") {
+                        out.push(path);
+                    }
+                }
+            }
+        }
+        let mut out = Vec::new();
+        let mut left = self.max_files;
+        walk(&self.root, &mut out, &mut left);
+        out
+    }
+}
+
+#[async_trait]
+impl BuildDiscovery for FilesystemCliDescriptorDiscovery {
+    async fn discover(&self, plan: &SelfBuildPlan) -> Result<Vec<BuildRequest>, BuilderError> {
+        let mut out = Vec::new();
+        for descriptor in self.descriptors() {
+            let Ok(raw) = fs::read_to_string(&descriptor) else { continue };
+            if raw.len() > 1_000_000 { continue; }
+            let Ok(document) = serde_json::from_str::<Value>(&raw) else { continue };
+            if document.get("schema").and_then(Value::as_str) != Some("synergy.cli-capabilities.v1") {
+                continue;
+            }
+            let Some(commands) = document.get("commands").and_then(Value::as_array) else { continue };
+            for command in commands {
+                let Some(program) = command.get("program").and_then(Value::as_str) else { continue };
+                let Some(capability) = command.get("capability").and_then(Value::as_str) else { continue };
+                if capability != plan.gap.suggested_capability
+                    && !capability.starts_with(plan.gap.suggested_capability.split('.').next().unwrap_or(""))
+                {
+                    continue;
+                }
+                let args = command.get("args").and_then(Value::as_array)
+                    .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                let input_contract = command.get("input_schema").cloned()
+                    .unwrap_or_else(|| serde_json::json!({
+                        "type":"object","properties":{},"additionalProperties":true
+                    }));
+                let risk = match command.get("risk").and_then(Value::as_str).unwrap_or("Medium") {
+                    "Low" => RiskClass::Low,
+                    "Medium" => RiskClass::Medium,
+                    "High" => RiskClass::High,
+                    "Critical" => RiskClass::Critical,
+                    _ => RiskClass::High,
+                };
+                let requires_approval = command.get("requires_approval").and_then(Value::as_bool)
+                    .unwrap_or(risk >= RiskClass::High);
+                let tags = command.get("tags").and_then(Value::as_array)
+                    .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                    .unwrap_or_else(BTreeSet::new);
+                let suffix = capability.to_ascii_lowercase()
+                    .chars().map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+                    .collect::<String>();
+                out.push(BuildRequest {
+                    plugin_id: format!("generated.cli.{suffix}"),
+                    display_name: format!("Generated CLI {capability}"),
+                    capability: capability.to_string(),
+                    source: AdapterSource::Cli { program: program.to_string(), args },
+                    risk,
+                    requires_approval,
+                    input_contract: Some(input_contract),
+                    tags,
+                });
+            }
+        }
+        Ok(out)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct StaticBuildDiscovery {
     pub requests: Vec<BuildRequest>,
@@ -1360,6 +1458,47 @@ mod tests {
             store.promote(candidate.candidate_id, &generated),
             Err(BuilderError::NotQualified)
         ));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn filesystem_cli_descriptor_builds_typed_candidate() {
+        let root = std::env::temp_dir().join(format!("autopilot-cli-discovery-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("synergy.cli.json"),
+            serde_json::json!({
+                "schema":"synergy.cli-capabilities.v1",
+                "commands":[{
+                    "program":"lead-tool",
+                    "capability":"crm.read",
+                    "args":["--json"],
+                    "risk":"Medium",
+                    "input_schema":{
+                        "type":"object",
+                        "properties":{"query":{"type":"string"}},
+                        "required":["query"],
+                        "additionalProperties":false
+                    }
+                }]
+            }).to_string(),
+        ).unwrap();
+        let discovery = FilesystemCliDescriptorDiscovery::new(&root);
+        let plan = SelfBuildPlan {
+            gap: SemanticGap {
+                goal:"прочитай CRM".into(),
+                suggested_capability:"crm.read".into(),
+                terms:["crm".to_string(),"read".to_string()].into_iter().collect(),
+                reason:"test".into(),
+            },
+            repository_candidates:Vec::new(),
+            strategies:vec![DiscoveryStrategy::CliEntrypoint],
+            qualification_gates:Vec::new(),
+            auto_execution_allowed:false,
+        };
+        let requests = discovery.discover(&plan).await.unwrap();
+        assert_eq!(requests.len(),1);
+        assert_eq!(requests[0].input_contract.as_ref().unwrap()["required"][0],"query");
         let _ = fs::remove_dir_all(root);
     }
 
