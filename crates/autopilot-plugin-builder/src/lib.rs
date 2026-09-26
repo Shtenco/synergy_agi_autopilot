@@ -272,6 +272,14 @@ impl PluginBuilder {
                     args: args.clone(),
                 },
             }),
+            input_contracts: {
+                let mut contracts = std::collections::BTreeMap::new();
+                contracts.insert(
+                    request.capability.clone(),
+                    derive_input_contract(&request.source),
+                );
+                contracts
+            },
         };
         manifest.validate().map_err(|error| BuilderError::Invalid(error.to_string()))?;
         Ok(PluginCandidate {
@@ -283,6 +291,64 @@ impl PluginBuilder {
             created_at: Utc::now(),
             qualification: None,
         })
+    }
+}
+
+fn derive_input_contract(source: &AdapterSource) -> Value {
+    match source {
+        AdapterSource::OpenApi { operation_id, document, .. } => {
+            let mut properties = serde_json::Map::new();
+            let mut required = Vec::<Value>::new();
+            let mut body_schema = None;
+
+            if let Some(paths) = document.get("paths").and_then(Value::as_object) {
+                'outer: for item in paths.values().filter_map(Value::as_object) {
+                    for operation in item.values().filter_map(Value::as_object) {
+                        if operation.get("operationId").and_then(Value::as_str) != Some(operation_id) {
+                            continue;
+                        }
+                        if let Some(parameters) = operation.get("parameters").and_then(Value::as_array) {
+                            for parameter in parameters {
+                                let Some(name) = parameter.get("name").and_then(Value::as_str) else { continue };
+                                let location = parameter.get("in").and_then(Value::as_str).unwrap_or("query");
+                                let mut schema = parameter.get("schema").cloned().unwrap_or_else(|| serde_json::json!({"type":"string"}));
+                                if let Some(object) = schema.as_object_mut() {
+                                    object.insert("x-location".into(), Value::String(location.into()));
+                                }
+                                properties.insert(name.to_string(), schema);
+                                if parameter.get("required").and_then(Value::as_bool) == Some(true) {
+                                    required.push(Value::String(name.to_string()));
+                                }
+                            }
+                        }
+                        body_schema = operation.pointer("/requestBody/content/application~1json/schema").cloned();
+                        break 'outer;
+                    }
+                }
+            }
+
+            if let Some(schema) = body_schema {
+                properties.insert("body".into(), schema);
+            }
+            serde_json::json!({
+                "type":"object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": false
+            })
+        }
+        AdapterSource::McpStdio { .. } => serde_json::json!({
+            "type":"object",
+            "properties":{},
+            "additionalProperties": true,
+            "x-contract-source":"mcp-runtime-discovery"
+        }),
+        AdapterSource::Cli { .. } => serde_json::json!({
+            "type":"object",
+            "properties":{},
+            "additionalProperties": true,
+            "x-contract-source":"cli-explicit-mapping"
+        }),
     }
 }
 
