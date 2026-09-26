@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use autopilot_audit::AuditStore;
+use autopilot_capability_graph::CapabilityGraph;
 use autopilot_core::{
     AgentExecutor, AgentOutcome, Director, DirectorConfig, DirectorError, GoalRequest, GoalRunSummary,
     PlannedTask, Planner, VerificationOutcome, Verifier,
@@ -200,6 +201,90 @@ impl PluginGoalEngine {
         let director = Director::new(
             DirectorConfig { max_repairs },
             PolicyEngine::new(rules),
+            audit,
+            planner,
+            bridge,
+            verifier,
+        );
+        Self { director }
+    }
+
+    pub async fn run(&self, goal: impl Into<String>) -> Result<GoalRunSummary, DirectorError> {
+        self.director.run_goal(GoalRequest::new(goal)).await
+    }
+}
+
+pub struct CapabilityGraphPlanner {
+    graph: Arc<CapabilityGraph>,
+    max_routes: usize,
+}
+
+impl CapabilityGraphPlanner {
+    pub fn new(graph: Arc<CapabilityGraph>, max_routes: usize) -> Self {
+        Self { graph, max_routes: max_routes.max(1) }
+    }
+}
+
+#[async_trait]
+impl Planner for CapabilityGraphPlanner {
+    async fn plan(&self, request: &GoalRequest) -> Result<Vec<PlannedTask>, String> {
+        let routes = self.graph.route_goal(&request.objective, self.max_routes);
+        if routes.is_empty() {
+            return Err("capability graph found no executable providers for goal".into());
+        }
+        routes.into_iter().map(|route| {
+            let envelope = json!({
+                "plugin_id": route.provider,
+                "capability": route.capability,
+                "input": {
+                    "goal": request.objective,
+                    "_route": {
+                        "repository": route.repository,
+                        "score": route.score,
+                        "matched_terms": route.matched_terms,
+                    }
+                },
+                "approved": false,
+            });
+            Ok(PlannedTask {
+                role: AgentRole::Custom("CapabilityRouter".into()),
+                objective: serde_json::to_string(&envelope).map_err(|error| error.to_string())?,
+                capability: Capability::Custom(format!(
+                    "plugin:{}/{}",
+                    envelope["plugin_id"].as_str().unwrap_or("unknown"),
+                    envelope["capability"].as_str().unwrap_or("unknown"),
+                )),
+                risk: RiskClass::Low,
+            })
+        }).collect()
+    }
+}
+
+pub struct GraphGoalEngine {
+    director: Director,
+}
+
+impl GraphGoalEngine {
+    pub fn new(
+        graph: Arc<CapabilityGraph>,
+        audit: Arc<dyn AuditStore>,
+        executor: Arc<PluginExecutor>,
+        max_routes: usize,
+    ) -> Self {
+        let planner = Arc::new(CapabilityGraphPlanner::new(graph, max_routes));
+        let bridge = Arc::new(PluginExecutorBridge {
+            executor,
+            context: Arc::new(Mutex::new(Vec::new())),
+        });
+        let verifier = Arc::new(PluginEvidenceVerifier);
+        let director = Director::new(
+            DirectorConfig { max_repairs: 0 },
+            PolicyEngine::new(vec![
+                autopilot_policy::PolicyRule::for_risk_at_least(
+                    RiskClass::Low,
+                    PolicyDecision::Allow,
+                )
+            ]),
             audit,
             planner,
             bridge,
