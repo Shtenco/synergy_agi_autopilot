@@ -358,7 +358,10 @@ fn derive_input_contract(source: &AdapterSource) -> Value {
                         if operation.get("operationId").and_then(Value::as_str) != Some(operation_id) {
                             continue;
                         }
-                        if let Some(parameters) = operation.get("parameters").and_then(Value::as_array) {
+                        for parameters in [
+                            item.get("parameters").and_then(Value::as_array),
+                            operation.get("parameters").and_then(Value::as_array),
+                        ].into_iter().flatten() {
                             for parameter in parameters {
                                 let Some(name) = parameter.get("name").and_then(Value::as_str) else { continue };
                                 let location = parameter.get("in").and_then(Value::as_str).unwrap_or("query");
@@ -367,12 +370,24 @@ fn derive_input_contract(source: &AdapterSource) -> Value {
                                     object.insert("x-location".into(), Value::String(location.into()));
                                 }
                                 properties.insert(name.to_string(), schema);
-                                if parameter.get("required").and_then(Value::as_bool) == Some(true) {
+                                if parameter.get("required").and_then(Value::as_bool) == Some(true)
+                                    && !required.iter().any(|value| value.as_str() == Some(name))
+                                {
                                     required.push(Value::String(name.to_string()));
                                 }
                             }
                         }
-                        body_schema = operation.pointer("/requestBody/content/application~1json/schema").cloned();
+                        body_schema = operation.get("requestBody")
+                            .and_then(|body| body.get("content"))
+                            .and_then(Value::as_object)
+                            .and_then(|content| {
+                                content.get("application/json")
+                                    .or_else(|| content.iter()
+                                        .find(|(media, _)| media.contains("json"))
+                                        .map(|(_, value)| value))
+                            })
+                            .and_then(|media| media.get("schema"))
+                            .cloned();
                         if operation.pointer("/requestBody/required").and_then(Value::as_bool) == Some(true) {
                             required.push(Value::String("body".into()));
                         }
