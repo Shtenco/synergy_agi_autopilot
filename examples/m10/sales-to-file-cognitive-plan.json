@@ -1,0 +1,27 @@
+{
+  "schema": "synergy.cognitive-plan.v1",
+  "goal": "Подготовь коммерческое предложение и сохрани его в файл",
+  "steps": [
+    {
+      "id": "proposal",
+      "objective": "Подготовь текст коммерческого предложения",
+      "plugin_id": "business.capability.runtime",
+      "capability": "business.sales.compose_offer",
+      "hints": {
+        "product": "SYNERGY AI AUTOPILOT",
+        "value": "автоматизировать цифровые задачи бизнеса",
+        "name": "Клиент"
+      }
+    },
+    {
+      "id": "save",
+      "objective": "Сохрани готовое коммерческое предложение в файл",
+      "plugin_id": "computer.local.commander",
+      "capability": "computer.write_file",
+      "hints": {
+        "path": "autopilot/m10/commercial_offer.txt",
+        "mode": "rewrite"
+      }
+    }
+  ]
+}
