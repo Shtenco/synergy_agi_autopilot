@@ -35,9 +35,17 @@ pub enum DiscoveryStrategy {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SelfBuildPlan {
     pub gap: SemanticGap,
+    pub repository_candidates: Vec<RepositoryDiscoveryCandidate>,
     pub strategies: Vec<DiscoveryStrategy>,
     pub qualification_gates: Vec<String>,
     pub auto_execution_allowed: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepositoryDiscoveryCandidate {
+    pub repository: String,
+    pub score: i64,
+    pub transports: BTreeSet<String>,
 }
 
 impl SemanticGapDetector {
@@ -56,8 +64,23 @@ impl SemanticGapDetector {
 
     pub fn self_build_plan(graph: &CapabilityGraph, goal: &str) -> Option<SelfBuildPlan> {
         let gap = Self::detect(graph, goal)?;
+        let query = autopilot_capability_graph::CapabilityQuery {
+            capability: Some(gap.suggested_capability.clone()),
+            keywords: gap.terms.iter().cloned().collect(),
+            require_transport: None,
+            include_archived: false,
+        };
+        let repository_candidates = graph.search(&query).into_iter().take(10).map(|candidate| {
+            RepositoryDiscoveryCandidate {
+                repository: candidate.repository,
+                score: candidate.score,
+                transports: candidate.transports,
+            }
+        }).collect();
+
         Some(SelfBuildPlan {
             gap,
+            repository_candidates,
             strategies: vec![
                 DiscoveryStrategy::OpenApiDocument,
                 DiscoveryStrategy::McpConfiguration,
