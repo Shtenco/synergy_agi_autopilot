@@ -6,13 +6,110 @@
   "kind": "mcp",
   "provider": "Shtenco/synergy_ai_blockchain",
   "capabilities": [
-    {"name":"computer.read_file","risk":"Low","requires_approval":false,"mapped_core_capabilities":["ReadWorkspace"]},
-    {"name":"computer.write_file","risk":"Medium","requires_approval":false,"mapped_core_capabilities":["WriteWorkspace"]},
-    {"name":"computer.run_command","risk":"High","requires_approval":true,"mapped_core_capabilities":["ExecuteProcess"]},
-    {"name":"computer.system_info","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]}
+    {
+      "name": "computer.read_file",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "ReadWorkspace"
+      ]
+    },
+    {
+      "name": "computer.write_file",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "WriteWorkspace"
+      ]
+    },
+    {
+      "name": "computer.run_command",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": [
+        "ExecuteProcess"
+      ]
+    },
+    {
+      "name": "computer.system_info",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    }
   ],
-  "endpoints": [{"transport":"mcp_stdio","address":"synergy-node mcp --stdio"}],
-  "tags": ["computer","local","mcp","worker"],
+  "endpoints": [
+    {
+      "transport": "mcp_stdio",
+      "address": "synergy-node mcp --stdio"
+    }
+  ],
+  "tags": [
+    "computer",
+    "local",
+    "mcp",
+    "worker"
+  ],
   "requires": [],
-  "enabled_by_default": false
+  "enabled_by_default": false,
+  "input_contracts": {
+    "computer.read_file": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "computer.write_file": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "default": "rewrite"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "computer.run_command": {
+      "type": "object",
+      "properties": {
+        "program": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "program"
+      ],
+      "additionalProperties": false
+    },
+    "computer.system_info": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  }
 }
