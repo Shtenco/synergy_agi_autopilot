@@ -744,6 +744,7 @@ fn normalize_mcp_tool_result(result: Value) -> Value {
                 if let Ok(value) = serde_json::from_str::<Value>(text) {
                     return value;
                 }
+                return Value::String(text.to_string());
             }
         }
     }
@@ -886,6 +887,15 @@ mod tests {
         }));
         assert_eq!(value["path"], "a.txt");
         assert_eq!(value["size"], 3);
+    }
+
+    #[test]
+    fn normalizes_mcp_plain_text_result() {
+        let value = normalize_mcp_tool_result(serde_json::json!({
+            "content":[{"type":"text","text":"hello world"}],
+            "isError":false
+        }));
+        assert_eq!(value, serde_json::json!("hello world"));
     }
 
     #[test]
