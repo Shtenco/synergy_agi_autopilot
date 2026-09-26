@@ -1,0 +1,16 @@
+{
+  "schema":"synergy.plugin.v1",
+  "id":"capability.email",
+  "name":"Universal Email Capability Pack",
+  "version":"1.0.0",
+  "kind":"business",
+  "provider":"connector.gateway",
+  "capabilities":[
+    {"name":"email.send","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess"]},
+    {"name":"email.read","risk":"Medium","requires_approval":false,"mapped_core_capabilities":["NetworkAccess"]}
+  ],
+  "endpoints":[{"transport":"openapi_gateway","address":"connector.gateway/openapi.call"}],
+  "tags":["email","messaging","openapi"],
+  "requires":["connector.gateway"],
+  "enabled_by_default":false
+}
