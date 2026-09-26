@@ -446,7 +446,7 @@ fn find_key_recursive(value: &Value, key: &str) -> Option<Value> {
 
 fn extract_email(text: &str) -> Option<String> {
     text.split_whitespace()
-        .map(|token| token.trim_matches(|c: char| ",.;:()[]{}<>"'".contains(c)))
+        .map(|token| token.trim_matches(|c: char| matches!(c, ',' | '.' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | '"' | '\'')))
         .find(|token| looks_like_email(token))
         .map(str::to_string)
 }
@@ -458,7 +458,7 @@ fn looks_like_email(value: &str) -> bool {
 
 fn extract_url(text: &str) -> Option<String> {
     text.split_whitespace()
-        .map(|token| token.trim_matches(|c: char| ",.;:()[]{}<>"'".contains(c)))
+        .map(|token| token.trim_matches(|c: char| matches!(c, ',' | '.' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | '"' | '\'')))
         .find(|token| looks_like_url(token))
         .map(str::to_string)
 }
@@ -500,7 +500,7 @@ fn extract_id(text: &str, field: &str) -> Option<String> {
                 c.is_whitespace() || matches!(c, ':' | '=' | '#' | '-')
             });
             let token = rest.split_whitespace().next()
-                .map(|v| v.trim_matches(|c: char| ",.;()[]{}"'".contains(c)))
+                .map(|v| v.trim_matches(|c: char| matches!(c, ',' | '.' | ';' | '(' | ')' | '[' | ']' | '{' | '}' | '"' | '\'')))
                 .unwrap_or("");
             if !token.is_empty() { return Some(token.to_string()); }
         }
@@ -671,6 +671,13 @@ fn split_goal(goal: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use autopilot_plugins::{PluginCapability, PluginKind, PluginManifest, PLUGIN_SCHEMA_V1};
+
+    #[test]
+    fn extractors_handle_wrapped_tokens() {
+        assert_eq!(extract_email("пиши <client@example.com>"), Some("client@example.com".into()));
+        assert_eq!(extract_url("открой (https://example.com)"), Some("https://example.com".into()));
+        assert_eq!(extract_id("client_id: abc-42"), Some("abc-42".into()));
+    }
 
     #[test]
     fn maps_email_and_message_from_goal() {
