@@ -421,8 +421,8 @@ fn matches_alias(field: &str, aliases: &[&str]) -> bool {
 
 fn context_aliases(field: &str) -> &'static [&'static str] {
     match normalize_field(field).as_str() {
-        "to" | "recipient" => &["email", "email_address", "recipient"],
-        "email" | "email_address" => &["to", "recipient"],
+        "to" | "recipient" => &["email", "email_address", "recipient_email", "recipient"],
+        "email" | "email_address" | "recipient_email" => &["to", "recipient"],
         "body" => &["message", "text", "content", "proposal"],
         "message" => &["body", "text", "content", "proposal"],
         "subject" => &["title"],
@@ -1157,6 +1157,81 @@ mod tests {
         };
         assert!(step.ready());
         assert!(step.requires_runtime_mapping());
+    }
+
+    #[test]
+    fn typed_dag_connects_sales_proposal_to_email_send() {
+        let producer = WorkflowStep {
+            id:"proposal".into(),
+            objective:"prepare proposal".into(),
+            plugin_id:"sales".into(),
+            capability:"sales.proposal".into(),
+            risk:RiskClass::Low,
+            input_contract:serde_json::json!({
+                "type":"object","properties":{},"additionalProperties":true
+            }),
+            output_contract:Some(serde_json::json!({
+                "type":"object",
+                "properties":{
+                    "recipient_email":{"type":"string","format":"email"},
+                    "subject":{"type":"string"},
+                    "message":{"type":"string"}
+                },
+                "required":["recipient_email","subject","message"],
+                "additionalProperties":false
+            })),
+            contract_declared:true,
+            mapped_arguments:serde_json::json!({}),
+            unresolved_required:BTreeSet::new(),
+            validation_errors:Vec::new(),
+            depends_on:Vec::new(),
+            requires_approval:false,
+        };
+        let consumer = WorkflowStep {
+            id:"send".into(),
+            objective:"send email".into(),
+            plugin_id:"email".into(),
+            capability:"email.send".into(),
+            risk:RiskClass::High,
+            input_contract:serde_json::json!({
+                "type":"object",
+                "properties":{
+                    "to":{"type":"string","format":"email"},
+                    "subject":{"type":"string"},
+                    "body":{"type":"string"}
+                },
+                "required":["to","subject","body"],
+                "additionalProperties":false
+            }),
+            output_contract:None,
+            contract_declared:true,
+            mapped_arguments:serde_json::json!({}),
+            unresolved_required:["to".to_string(),"subject".to_string(),"body".to_string()].into_iter().collect(),
+            validation_errors:Vec::new(),
+            depends_on:Vec::new(),
+            requires_approval:true,
+        };
+        let plan=VerifiedDagOptimizer::optimize(WorkflowPlan {
+            goal:"prepare and send".into(),
+            steps:vec![producer,consumer],
+            unresolved_objectives:Vec::new(),
+            typed_edges:Vec::new(),
+            execution_layers:Vec::new(),
+            ready:false,
+        }).unwrap();
+        assert!(plan.ready);
+        assert_eq!(plan.typed_edges.len(),3);
+        assert_eq!(plan.steps[1].depends_on,vec!["proposal"]);
+        assert_eq!(plan.execution_layers,vec![vec!["proposal".to_string()],vec!["send".to_string()]]);
+        assert!(plan.typed_edges.iter().any(|edge| edge.from_path=="recipient_email" && edge.to_field=="to"));
+        assert!(plan.typed_edges.iter().any(|edge| edge.from_path=="message" && edge.to_field=="body"));
+    }
+
+    #[test]
+    fn typed_matcher_rejects_unproven_email_format() {
+        let producer=serde_json::json!({"type":"string"});
+        let consumer=serde_json::json!({"type":"string","format":"email"});
+        assert!(TypedSchemaMatcher::compatible(&producer,&consumer).is_none());
     }
 
     #[test]
