@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use autopilot_capability_graph::CapabilityGraph;
 use autopilot_domain::{Capability, RiskClass};
-use autopilot_plugins::{PluginAdapter, PluginCapability, PluginEndpoint, PluginKind, PluginManifest, PLUGIN_SCHEMA_V1};
+use autopilot_plugins::{PluginAdapter, PluginCapability, PluginEndpoint, PluginKind, PluginManifest, PluginRegistry, PLUGIN_SCHEMA_V1};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -49,21 +49,56 @@ pub struct RepositoryDiscoveryCandidate {
 }
 
 impl SemanticGapDetector {
+    fn gap(goal: &str, reason: &str) -> SemanticGap {
+        let terms = tokenize(goal);
+        SemanticGap {
+            goal: goal.to_string(),
+            suggested_capability: infer_capability(&terms),
+            terms,
+            reason: reason.into(),
+        }
+    }
+
     pub fn detect(graph: &CapabilityGraph, goal: &str) -> Option<SemanticGap> {
         if !graph.route_goal(goal, 1).is_empty() {
             return None;
         }
-        let terms = tokenize(goal);
-        Some(SemanticGap {
-            goal: goal.to_string(),
-            suggested_capability: infer_capability(&terms),
-            terms,
-            reason: "no executable provider matched the semantic goal".into(),
-        })
+        Some(Self::gap(goal, "no executable provider matched the semantic goal"))
+    }
+
+    pub fn detect_typed(
+        graph: &CapabilityGraph,
+        registry: &PluginRegistry,
+        goal: &str,
+    ) -> Option<SemanticGap> {
+        let routes = graph.route_goal(goal, 20);
+        let typed = routes.iter().any(|route| {
+            registry.get(&route.provider)
+                .and_then(|manifest| manifest.input_contract(&route.capability))
+                .is_some()
+        });
+        if typed {
+            None
+        } else {
+            Some(Self::gap(goal, "no typed executable provider matched the semantic goal"))
+        }
     }
 
     pub fn self_build_plan(graph: &CapabilityGraph, goal: &str) -> Option<SelfBuildPlan> {
         let gap = Self::detect(graph, goal)?;
+        Some(Self::plan_for_gap(graph, gap))
+    }
+
+    pub fn self_build_plan_typed(
+        graph: &CapabilityGraph,
+        registry: &PluginRegistry,
+        goal: &str,
+    ) -> Option<SelfBuildPlan> {
+        let gap = Self::detect_typed(graph, registry, goal)?;
+        Some(Self::plan_for_gap(graph, gap))
+    }
+
+    fn plan_for_gap(graph: &CapabilityGraph, gap: SemanticGap) -> SelfBuildPlan {
         let query = autopilot_capability_graph::CapabilityQuery {
             capability: Some(gap.suggested_capability.clone()),
             keywords: gap.terms.iter().cloned().collect(),
@@ -78,7 +113,7 @@ impl SemanticGapDetector {
             }
         }).collect();
 
-        Some(SelfBuildPlan {
+        SelfBuildPlan {
             gap,
             repository_candidates,
             strategies: vec![
@@ -95,7 +130,7 @@ impl SemanticGapDetector {
                 "promotion from quarantine only after all checks pass".into(),
             ],
             auto_execution_allowed: false,
-        })
+        }
     }
 }
 
@@ -1036,6 +1071,22 @@ impl<Q: CandidateQualifier, D: BuildDiscovery> SelfBuildCoordinator<Q, D> {
         let Some(plan) = SemanticGapDetector::self_build_plan(graph, goal) else {
             return Ok(SelfBuildOutcome::ExistingProvider);
         };
+        self.ensure_plan(plan).await
+    }
+
+    pub async fn ensure_typed_for_goal(
+        &self,
+        graph: &CapabilityGraph,
+        registry: &PluginRegistry,
+        goal: &str,
+    ) -> Result<SelfBuildOutcome, BuilderError> {
+        let Some(plan) = SemanticGapDetector::self_build_plan_typed(graph, registry, goal) else {
+            return Ok(SelfBuildOutcome::ExistingProvider);
+        };
+        self.ensure_plan(plan).await
+    }
+
+    async fn ensure_plan(&self, plan: SelfBuildPlan) -> Result<SelfBuildOutcome, BuilderError> {
         let requests = self.discovery.discover(&plan).await?;
         if requests.is_empty() {
             return Ok(SelfBuildOutcome::DiscoveryEmpty { plan });
