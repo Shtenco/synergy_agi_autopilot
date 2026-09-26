@@ -11,6 +11,7 @@ use autopilot_plugins::{PluginAdapter, PluginManifest, PluginRegistry};
 use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use autopilot_secrets::{EnvSecretVault, SecretRef, SecretVault};
+use autopilot_semantic_planner::JsonContractValidator;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -69,6 +70,8 @@ pub enum PluginRuntimeError {
     PersistentApproval(String),
     #[error("budget verification failed: {0}")]
     Budget(String),
+    #[error("plugin input contract validation failed: {0}")]
+    InvalidInput(String),
 }
 
 pub struct PluginExecutor {
@@ -149,6 +152,13 @@ impl PluginExecutor {
         let manifest = self.registry.get(&call.plugin_id)
             .ok_or_else(|| PluginRuntimeError::UnknownPlugin(call.plugin_id.clone()))?;
         self.authorize(manifest, &call)?;
+        if let Some(contract) = manifest.input_contract(&call.capability) {
+            let sanitized = sanitize_contract_input(&call.input);
+            let errors = JsonContractValidator::validate(contract, &sanitized);
+            if !errors.is_empty() {
+                return Err(PluginRuntimeError::InvalidInput(errors.join("; ")));
+            }
+        }
 
         {
             let mut health = self.health.lock()
@@ -691,6 +701,20 @@ impl PluginExecutor {
         Ok(result)
     }
 }
+
+fn sanitize_contract_input(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .filter(|(key, _)| !key.starts_with('_'))
+                .map(|(key, value)| (key.clone(), sanitize_contract_input(value)))
+                .collect()
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(sanitize_contract_input).collect()),
+        other => other.clone(),
+    }
+}
+
 
 fn loopback_http_json(
     base: &str,
