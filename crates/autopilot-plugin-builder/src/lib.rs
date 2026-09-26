@@ -365,7 +365,8 @@ fn derive_input_contract(source: &AdapterSource) -> Value {
                             for parameter in parameters {
                                 let Some(name) = parameter.get("name").and_then(Value::as_str) else { continue };
                                 let location = parameter.get("in").and_then(Value::as_str).unwrap_or("query");
-                                let mut schema = parameter.get("schema").cloned().unwrap_or_else(|| serde_json::json!({"type":"string"}));
+                                let raw_schema = parameter.get("schema").cloned().unwrap_or_else(|| serde_json::json!({"type":"string"}));
+                                let mut schema = resolve_document_schema_refs(document, &raw_schema, 0);
                                 if let Some(object) = schema.as_object_mut() {
                                     object.insert("x-location".into(), Value::String(location.into()));
                                 }
@@ -387,7 +388,7 @@ fn derive_input_contract(source: &AdapterSource) -> Value {
                                         .map(|(_, value)| value))
                             })
                             .and_then(|media| media.get("schema"))
-                            .cloned();
+                            .map(|schema| resolve_document_schema_refs(document, schema, 0));
                         if operation.pointer("/requestBody/required").and_then(Value::as_bool) == Some(true) {
                             required.push(Value::String("body".into()));
                         }
@@ -418,6 +419,41 @@ fn derive_input_contract(source: &AdapterSource) -> Value {
             "additionalProperties": true,
             "x-contract-source":"cli-explicit-mapping"
         }),
+    }
+}
+
+fn resolve_document_schema_refs(document: &Value, schema: &Value, depth: usize) -> Value {
+    if depth >= 12 {
+        return schema.clone();
+    }
+    match schema {
+        Value::Object(map) => {
+            if let Some(reference) = map.get("$ref").and_then(Value::as_str) {
+                if let Some(pointer) = reference.strip_prefix('#') {
+                    if let Some(target) = document.pointer(pointer) {
+                        let mut resolved = resolve_document_schema_refs(document, target, depth + 1);
+                        if let Some(object) = resolved.as_object_mut() {
+                            for (key, value) in map {
+                                if key != "$ref" {
+                                    object.insert(
+                                        key.clone(),
+                                        resolve_document_schema_refs(document, value, depth + 1),
+                                    );
+                                }
+                            }
+                        }
+                        return resolved;
+                    }
+                }
+            }
+            Value::Object(map.iter().map(|(key, value)| {
+                (key.clone(), resolve_document_schema_refs(document, value, depth + 1))
+            }).collect())
+        }
+        Value::Array(items) => Value::Array(items.iter()
+            .map(|item| resolve_document_schema_refs(document, item, depth + 1))
+            .collect()),
+        other => other.clone(),
     }
 }
 
