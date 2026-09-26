@@ -117,7 +117,7 @@ fn goal_terms(goal: &str) -> BTreeSet<String> {
     ];
     let snapshot = terms.clone();
     for term in snapshot {
-        for (needle, mapped) in aliases {
+        for &(needle, mapped) in aliases {
             if term.contains(needle) {
                 terms.extend(mapped.iter().map(|v|v.to_string()));
             }
