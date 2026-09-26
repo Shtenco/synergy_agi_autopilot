@@ -214,6 +214,8 @@ pub struct BuildRequest {
     pub source: AdapterSource,
     pub risk: RiskClass,
     pub requires_approval: bool,
+    #[serde(default)]
+    pub input_contract: Option<Value>,
     pub tags: BTreeSet<String>,
 }
 
@@ -276,7 +278,8 @@ impl PluginBuilder {
                 let mut contracts = std::collections::BTreeMap::new();
                 contracts.insert(
                     request.capability.clone(),
-                    derive_input_contract(&request.source),
+                    request.input_contract.clone()
+                        .unwrap_or_else(|| derive_input_contract(&request.source)),
                 );
                 contracts
             },
@@ -749,6 +752,7 @@ impl FilesystemOpenApiDiscovery {
                     },
                     risk,
                     requires_approval: risk >= RiskClass::High,
+                    input_contract: None,
                     tags: ["generated".to_string(), "openapi".to_string(), format!("source:{}", file.display())]
                         .into_iter().collect(),
                 };
@@ -850,7 +854,7 @@ impl FilesystemMcpDiscovery {
         &self,
         command: &str,
         args: &[String],
-    ) -> Result<Vec<(String, String)>, BuilderError> {
+    ) -> Result<Vec<(String, String, Value)>, BuilderError> {
         if !self.allowed_programs.contains(command) {
             return Ok(Vec::new());
         }
@@ -878,7 +882,13 @@ impl FilesystemMcpDiscovery {
             return Ok(items.iter().filter_map(|item| {
                 let name = item.get("name").and_then(Value::as_str)?.to_string();
                 let description = item.get("description").and_then(Value::as_str).unwrap_or("").to_string();
-                Some((name, description))
+                let input_schema = item.get("inputSchema").cloned()
+                    .unwrap_or_else(|| serde_json::json!({
+                        "type":"object",
+                        "properties":{},
+                        "additionalProperties":true
+                    }));
+                Some((name, description, input_schema))
             }).collect());
         }
         Ok(Vec::new())
@@ -923,7 +933,7 @@ impl BuildDiscovery for FilesystemMcpDiscovery {
                     .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>())
                     .unwrap_or_default();
                 let tools = self.list_tools(command, &args).await?;
-                for (tool, description) in tools {
+                for (tool, description, input_schema) in tools {
                     let score = Self::semantic_score(plan, &tool, &description);
                     if score <= 0 { continue; }
                     let risk = Self::tool_risk(&tool);
@@ -941,6 +951,7 @@ impl BuildDiscovery for FilesystemMcpDiscovery {
                         },
                         risk,
                         requires_approval: risk >= RiskClass::High,
+                        input_contract: Some(input_schema),
                         tags: ["generated".to_string(), "mcp".to_string(), format!("server:{server_name}")]
                             .into_iter().collect(),
                     }));
@@ -1100,6 +1111,7 @@ mod tests {
             source,
             risk: RiskClass::Medium,
             requires_approval: false,
+            input_contract: None,
             tags: ["crm".to_string()].into_iter().collect(),
         }).unwrap();
         assert!(!candidate.manifest.enabled_by_default);
@@ -1118,6 +1130,7 @@ mod tests {
             },
             risk: RiskClass::Low,
             requires_approval: false,
+            input_contract: None,
             tags: BTreeSet::new(),
         });
         assert!(matches!(result, Err(BuilderError::Invalid(_))));
@@ -1138,6 +1151,7 @@ mod tests {
             },
             risk: RiskClass::Low,
             requires_approval: false,
+            input_contract: None,
             tags: BTreeSet::new(),
         }).unwrap();
         let root = std::env::temp_dir().join(format!("autopilot-candidate-test-{}", Uuid::new_v4()));
@@ -1248,6 +1262,7 @@ mod tests {
             },
             risk: RiskClass::Medium,
             requires_approval: false,
+            input_contract: None,
             tags: ["crm".to_string()].into_iter().collect(),
         };
         let runtime = Arc::new(FakeRuntime::new(CommandResult {
@@ -1290,6 +1305,7 @@ mod tests {
             },
             risk: RiskClass::High,
             requires_approval: true,
+            input_contract: None,
             tags: ["crm".to_string()].into_iter().collect(),
         };
         let runtime = Arc::new(FakeRuntime::new(CommandResult {
@@ -1329,6 +1345,7 @@ mod tests {
             },
             risk: RiskClass::Low,
             requires_approval: false,
+            input_contract: None,
             tags: BTreeSet::new(),
         }).unwrap();
         let report = qualifier.qualify(&candidate).await;
