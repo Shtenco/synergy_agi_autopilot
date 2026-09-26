@@ -6,15 +6,137 @@
   "kind": "model",
   "provider": "Shtenco/synergy_agi_nexus",
   "capabilities": [
-    {"name":"intelligence.infer","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"intelligence.reason","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"memory.search","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"memory.upsert","risk":"Medium","requires_approval":false,"mapped_core_capabilities":[]}
+    {
+      "name": "intelligence.infer",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "intelligence.reason",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "memory.search",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "memory.upsert",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    }
   ],
   "endpoints": [
-    {"transport":"compatibility_sidecar","address":"http://127.0.0.1:8130"}
+    {
+      "transport": "compatibility_sidecar",
+      "address": "http://127.0.0.1:8130"
+    }
   ],
-  "tags": ["intelligence","memory","nexus","model"],
+  "tags": [
+    "intelligence",
+    "memory",
+    "nexus",
+    "model"
+  ],
   "requires": [],
-  "enabled_by_default": false
+  "enabled_by_default": false,
+  "input_contracts": {
+    "intelligence.infer": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "intelligence.reason": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "memory.search": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1
+        },
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "limit": {
+          "type": "integer",
+          "default": 10
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "memory.upsert": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metadata": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        },
+        "source": {
+          "type": "string",
+          "default": "synergy-ai-autopilot"
+        }
+      },
+      "required": [
+        "key",
+        "content",
+        "namespace"
+      ],
+      "additionalProperties": false
+    }
+  }
 }
