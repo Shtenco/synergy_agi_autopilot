@@ -45,6 +45,8 @@ pub enum SemanticError {
     ContractNotObject,
     #[error("workflow has no executable steps")]
     EmptyWorkflow,
+    #[error("workflow graph is cyclic")]
+    CyclicWorkflow,
 }
 
 fn resolve_local_schema_refs(schema: &Value) -> Value {
@@ -550,6 +552,222 @@ fn extract_array_from_goal(_field: &str, goal: &str) -> Option<Value> {
     if values.len() > 1 { Some(Value::Array(values)) } else { None }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SchemaCompatibility {
+    Exact,
+    Widening,
+    AliasExact,
+    AliasWidening,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TypedDataflowEdge {
+    pub from_step: String,
+    pub from_path: String,
+    pub to_step: String,
+    pub to_field: String,
+    pub compatibility: SchemaCompatibility,
+    pub score: u16,
+}
+
+#[derive(Clone, Debug)]
+struct SchemaField {
+    path: String,
+    name: String,
+    schema: Value,
+}
+
+pub struct TypedSchemaMatcher;
+
+impl TypedSchemaMatcher {
+    pub fn compatible(producer: &Value, consumer: &Value) -> Option<SchemaCompatibility> {
+        let p = schema_type(producer);
+        let c = schema_type(consumer);
+        let type_match = match (p.as_deref(), c.as_deref()) {
+            (Some(a), Some(b)) if a == b => Some(SchemaCompatibility::Exact),
+            (Some("integer"), Some("number")) => Some(SchemaCompatibility::Widening),
+            (None, _) | (_, None) => Some(SchemaCompatibility::Widening),
+            _ => None,
+        }?;
+
+        let consumer_format = consumer.get("format").and_then(Value::as_str);
+        let producer_format = producer.get("format").and_then(Value::as_str);
+        if let Some(required_format) = consumer_format {
+            if producer_format != Some(required_format) {
+                return None;
+            }
+        }
+        Some(type_match)
+    }
+
+    pub fn match_field(
+        producer_contract: &Value,
+        consumer_field: &str,
+        consumer_schema: &Value,
+    ) -> Vec<(String, SchemaCompatibility, u16)> {
+        let mut matches = Vec::new();
+        for field in flatten_schema_fields(producer_contract, "", 0) {
+            let exact = field.name == consumer_field;
+            let alias = context_aliases(consumer_field).iter().any(|alias| *alias == field.name);
+            if !exact && !alias { continue; }
+            let Some(mut compatibility) = Self::compatible(&field.schema, consumer_schema) else { continue };
+            let mut score = if exact { 100 } else { 80 };
+            if !exact {
+                compatibility = match compatibility {
+                    SchemaCompatibility::Exact => SchemaCompatibility::AliasExact,
+                    SchemaCompatibility::Widening => SchemaCompatibility::AliasWidening,
+                    other => other,
+                };
+            }
+            if matches!(compatibility, SchemaCompatibility::Exact | SchemaCompatibility::AliasExact) {
+                score += 10;
+            }
+            matches.push((field.path, compatibility, score));
+        }
+        matches.sort_by(|a,b| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0)));
+        matches
+    }
+}
+
+fn schema_type(schema: &Value) -> Option<String> {
+    if let Some(kind) = schema.get("type").and_then(Value::as_str) {
+        return Some(kind.to_string());
+    }
+    if schema.get("properties").is_some() { return Some("object".into()); }
+    if schema.get("items").is_some() { return Some("array".into()); }
+    None
+}
+
+fn flatten_schema_fields(schema: &Value, prefix: &str, depth: usize) -> Vec<SchemaField> {
+    if depth >= 8 { return Vec::new(); }
+    let resolved = resolve_local_schema_refs(schema);
+    let Some(properties) = resolved.get("properties").and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (name, child) in properties {
+        let path = if prefix.is_empty() { name.clone() } else { format!("{prefix}.{name}") };
+        out.push(SchemaField { path: path.clone(), name: name.clone(), schema: child.clone() });
+        if schema_type(child).as_deref() == Some("object") {
+            out.extend(flatten_schema_fields(child, &path, depth + 1));
+        }
+    }
+    out
+}
+
+pub struct VerifiedDagOptimizer;
+
+impl VerifiedDagOptimizer {
+    pub fn optimize(mut plan: WorkflowPlan) -> Result<WorkflowPlan, SemanticError> {
+        let mut edges = Vec::new();
+
+        for consumer_index in 0..plan.steps.len() {
+            let required = required_fields(&plan.steps[consumer_index].input_contract);
+            let mapped = plan.steps[consumer_index].mapped_arguments.as_object()
+                .map(|object| object.keys().cloned().collect::<BTreeSet<_>>())
+                .unwrap_or_default();
+
+            for field in required.into_iter().filter(|field| !mapped.contains(field)) {
+                let consumer_schema = plan.steps[consumer_index].input_contract
+                    .pointer(&format!("/properties/{}", escape_pointer(&field)))
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                let mut candidates = Vec::<TypedDataflowEdge>::new();
+
+                for producer_index in 0..consumer_index {
+                    let Some(output_contract) = plan.steps[producer_index].output_contract.as_ref() else { continue };
+                    for (path, compatibility, score) in TypedSchemaMatcher::match_field(
+                        output_contract,
+                        &field,
+                        &consumer_schema,
+                    ) {
+                        candidates.push(TypedDataflowEdge {
+                            from_step: plan.steps[producer_index].id.clone(),
+                            from_path: path,
+                            to_step: plan.steps[consumer_index].id.clone(),
+                            to_field: field.clone(),
+                            compatibility,
+                            score: score + (producer_index as u16).min(20),
+                        });
+                    }
+                }
+
+                candidates.sort_by(|a,b| b.score.cmp(&a.score)
+                    .then_with(|| b.from_step.cmp(&a.from_step))
+                    .then_with(|| a.from_path.cmp(&b.from_path)));
+
+                if let Some(best) = candidates.first().cloned() {
+                    let ambiguous = candidates.get(1).is_some_and(|second| second.score == best.score);
+                    if !ambiguous {
+                        edges.push(best);
+                    }
+                }
+            }
+        }
+
+        for step in &mut plan.steps {
+            step.depends_on.clear();
+        }
+        for edge in &edges {
+            if let Some(step) = plan.steps.iter_mut().find(|step| step.id == edge.to_step) {
+                if !step.depends_on.contains(&edge.from_step) {
+                    step.depends_on.push(edge.from_step.clone());
+                }
+            }
+        }
+
+        let covered = edges.iter()
+            .map(|edge| (edge.to_step.clone(), edge.to_field.clone()))
+            .collect::<BTreeSet<_>>();
+        for step in &mut plan.steps {
+            step.unresolved_required.retain(|field| {
+                !covered.contains(&(step.id.clone(), field.clone()))
+            });
+        }
+
+        let layers = topological_layers(&plan.steps)?;
+        plan.typed_edges = edges;
+        plan.execution_layers = layers;
+        plan.ready = plan.unresolved_objectives.is_empty()
+            && plan.steps.iter().all(|step| {
+                step.contract_declared
+                    && step.validation_errors.is_empty()
+                    && step.unresolved_required.is_empty()
+            });
+        Ok(plan)
+    }
+}
+
+fn required_fields(contract: &Value) -> BTreeSet<String> {
+    contract.get("required").and_then(Value::as_array)
+        .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+fn escape_pointer(value: &str) -> String {
+    value.replace('~', "~0").replace('/', "~1")
+}
+
+fn topological_layers(steps: &[WorkflowStep]) -> Result<Vec<Vec<String>>, SemanticError> {
+    let mut remaining = steps.iter().map(|step| {
+        (step.id.clone(), step.depends_on.iter().cloned().collect::<BTreeSet<_>>())
+    }).collect::<BTreeMap<_,_>>();
+    let mut layers = Vec::new();
+    while !remaining.is_empty() {
+        let ready = remaining.iter()
+            .filter(|(_, deps)| deps.is_empty())
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        if ready.is_empty() { return Err(SemanticError::CyclicWorkflow); }
+        for id in &ready { remaining.remove(id); }
+        for deps in remaining.values_mut() {
+            for id in &ready { deps.remove(id); }
+        }
+        layers.push(ready);
+    }
+    Ok(layers)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkflowStep {
     pub id: String,
@@ -558,6 +776,7 @@ pub struct WorkflowStep {
     pub capability: String,
     pub risk: RiskClass,
     pub input_contract: Value,
+    pub output_contract: Option<Value>,
     pub contract_declared: bool,
     pub mapped_arguments: Value,
     pub unresolved_required: BTreeSet<String>,
@@ -583,6 +802,10 @@ pub struct WorkflowPlan {
     pub goal: String,
     pub steps: Vec<WorkflowStep>,
     pub unresolved_objectives: Vec<String>,
+    #[serde(default)]
+    pub typed_edges: Vec<TypedDataflowEdge>,
+    #[serde(default)]
+    pub execution_layers: Vec<Vec<String>>,
     pub ready: bool,
 }
 
@@ -623,11 +846,6 @@ impl AdaptiveWorkflowSynthesizer {
             local_context.goal = clause.clone();
             let mapped = SemanticArgumentMapper::map(&contract, &local_context)?;
             let step_number = steps.len() + 1;
-            let depends_on = if steps.is_empty() {
-                Vec::new()
-            } else {
-                vec![steps.last().map(|step: &WorkflowStep| step.id.clone()).unwrap()]
-            };
             steps.push(WorkflowStep {
                 id: format!("step-{step_number}"),
                 objective: clause.clone(),
@@ -635,18 +853,26 @@ impl AdaptiveWorkflowSynthesizer {
                 capability: route.capability,
                 risk: capability.risk,
                 input_contract: contract,
+                output_contract: manifest.output_contract(&route.capability).cloned(),
                 contract_declared: true,
                 mapped_arguments: mapped.arguments,
                 unresolved_required: mapped.unresolved_required,
                 validation_errors: mapped.validation_errors,
-                depends_on,
+                depends_on: Vec::new(),
                 requires_approval: capability.requires_approval,
             });
         }
 
         if steps.is_empty() { return Err(SemanticError::EmptyWorkflow); }
-        let ready = unresolved_objectives.is_empty() && steps.iter().all(WorkflowStep::ready);
-        Ok(WorkflowPlan { goal: goal.into(), steps, unresolved_objectives, ready })
+        let plan = WorkflowPlan {
+            goal: goal.into(),
+            steps,
+            unresolved_objectives,
+            typed_edges: Vec::new(),
+            execution_layers: Vec::new(),
+            ready: false,
+        };
+        VerifiedDagOptimizer::optimize(plan)
     }
 }
 
@@ -830,6 +1056,7 @@ mod tests {
                 "properties":{"client_id":{"type":"string"}},
                 "required":["client_id"]
             }),
+            output_contract: None,
             contract_declared: true,
             mapped_arguments: serde_json::json!({}),
             unresolved_required: ["client_id".to_string()].into_iter().collect(),
@@ -870,6 +1097,7 @@ mod tests {
                     "required":["query"]
                 })
             )]),
+        output_contracts:BTreeMap::new(),
         };
         registry.register(manifest).unwrap();
         let mut graph=CapabilityGraph::default();
@@ -911,6 +1139,7 @@ mod tests {
                     capability.into(),
                     serde_json::json!({"type":"object","properties":{},"additionalProperties":true})
                 )]),
+            output_contracts:BTreeMap::new(),
             };
             registry.register(manifest).unwrap();
         }
