@@ -1,4 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::Path;
 
 use autopilot_domain::{Capability, RiskClass};
 use serde::{Deserialize, Serialize};
@@ -220,6 +222,27 @@ impl PluginRegistry {
             .collect()
     }
 
+    pub fn load_dir(&mut self, root: impl AsRef<Path>) -> Result<usize, PluginError> {
+        let root = root.as_ref();
+        if !root.exists() {
+            return Ok(0);
+        }
+        let entries = fs::read_dir(root).map_err(|error| PluginError::Io(error.to_string()))?;
+        let mut loaded = 0usize;
+        for entry in entries {
+            let entry = entry.map_err(|error| PluginError::Io(error.to_string()))?;
+            let manifest_path = entry.path().join("plugin.json");
+            if !manifest_path.is_file() { continue; }
+            let raw = fs::read_to_string(&manifest_path)
+                .map_err(|error| PluginError::Io(format!("{}: {error}", manifest_path.display())))?;
+            let manifest = parse_manifest_json(&raw)?;
+            self.register(manifest)?;
+            loaded += 1;
+        }
+        self.validate_dependencies()?;
+        Ok(loaded)
+    }
+
     pub fn validate_dependencies(&self) -> Result<(), PluginError> {
         for manifest in self.manifests.values() {
             for dependency in &manifest.requires {
@@ -256,6 +279,8 @@ pub enum PluginError {
     DuplicateCapability(String),
     #[error("plugin {plugin} requires missing dependency {dependency}")]
     MissingDependency { plugin: String, dependency: String },
+    #[error("plugin registry I/O error: {0}")]
+    Io(String),
 }
 
 #[cfg(test)]
