@@ -668,6 +668,37 @@ mod tests {
     }
 
     #[test]
+    fn maps_email_body_from_prior_step_aliases() {
+        let schema = serde_json::json!({
+            "type":"object",
+            "properties":{
+                "to":{"type":"string","format":"email"},
+                "body":{"type":"string","minLength":1}
+            },
+            "required":["to","body"],
+            "additionalProperties":false
+        });
+        let mapped = SemanticArgumentMapper::map(
+            &schema,
+            &MappingContext {
+                goal:"отправь коммерческое предложение".into(),
+                prior_outputs: vec![serde_json::json!({
+                    "output":{
+                        "lead":{"email":"client@example.com"},
+                        "proposal":{"message":"Здравствуйте! Предложение готово."}
+                    }
+                })],
+                ..Default::default()
+            },
+        ).unwrap();
+        assert_eq!(mapped.arguments["to"], "client@example.com");
+        assert_eq!(mapped.arguments["body"], "Здравствуйте! Предложение готово.");
+        assert!(mapped.valid());
+        assert!(mapped.evidence.iter().any(|item| item.source.contains("alias:email")));
+        assert!(mapped.evidence.iter().any(|item| item.source.contains("alias:message")));
+    }
+
+    #[test]
     fn prior_output_has_priority_for_exact_field() {
         let schema = serde_json::json!({
             "type":"object",
