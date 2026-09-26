@@ -408,24 +408,6 @@ fn extract_boolean_after_field(text: &str, field: &str) -> Option<bool> {
     }
 }
 
-fn extract_first_integer(text: &str) -> Option<i64> {
-    text.split(|c: char| !c.is_ascii_digit() && c != '-')
-        .find_map(|part| if part.is_empty() || part == "-" { None } else { part.parse().ok() })
-}
-
-fn extract_first_number(text: &str) -> Option<f64> {
-    text.replace(',', ".")
-        .split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-')
-        .find_map(|part| if part.is_empty() || matches!(part, "-" | ".") { None } else { part.parse().ok() })
-}
-
-fn extract_boolean(text: &str) -> Option<bool> {
-    let lower = text.to_ascii_lowercase();
-    if [" true"," yes"," да"," включ"].iter().any(|v| lower.contains(v)) { Some(true) }
-    else if [" false"," no"," нет"," выключ"].iter().any(|v| lower.contains(v)) { Some(false) }
-    else { None }
-}
-
 fn extract_array_from_goal(_field: &str, goal: &str) -> Option<Value> {
     let quoted = extract_quoted(goal)?;
     let values = quoted.split(',').map(str::trim).filter(|v| !v.is_empty())
