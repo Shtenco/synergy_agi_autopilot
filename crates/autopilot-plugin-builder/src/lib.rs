@@ -711,6 +711,181 @@ impl BuildDiscovery for FilesystemOpenApiDiscovery {
     }
 }
 
+pub struct BuildDiscoveryChain {
+    providers: Vec<Arc<dyn BuildDiscovery>>,
+}
+
+impl BuildDiscoveryChain {
+    pub fn new(providers: Vec<Arc<dyn BuildDiscovery>>) -> Self {
+        Self { providers }
+    }
+
+    pub fn push(&mut self, provider: Arc<dyn BuildDiscovery>) {
+        self.providers.push(provider);
+    }
+}
+
+#[async_trait]
+impl BuildDiscovery for BuildDiscoveryChain {
+    async fn discover(&self, plan: &SelfBuildPlan) -> Result<Vec<BuildRequest>, BuilderError> {
+        let mut all = Vec::new();
+        for provider in &self.providers {
+            all.extend(provider.discover(plan).await?);
+        }
+        Ok(all)
+    }
+}
+
+pub struct FilesystemMcpDiscovery {
+    root: PathBuf,
+    runtime: Arc<dyn RuntimeAdapter>,
+    allowed_programs: BTreeSet<String>,
+    max_files: usize,
+}
+
+impl FilesystemMcpDiscovery {
+    pub fn new(
+        root: impl Into<PathBuf>,
+        runtime: Arc<dyn RuntimeAdapter>,
+        allowed_programs: BTreeSet<String>,
+    ) -> Self {
+        Self { root: root.into(), runtime, allowed_programs, max_files: 5000 }
+    }
+
+    fn collect_configs(&self) -> Vec<PathBuf> {
+        fn walk(root: &Path, out: &mut Vec<PathBuf>, left: &mut usize) {
+            if *left == 0 { return; }
+            let Ok(entries) = fs::read_dir(root) else { return };
+            for entry in entries.flatten() {
+                if *left == 0 { break; }
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|v| v.to_str()).unwrap_or("");
+                    if matches!(name, ".git" | "node_modules" | "target" | ".venv" | "venv" | "dist" | "build") {
+                        continue;
+                    }
+                    walk(&path, out, left);
+                } else if path.is_file() {
+                    *left -= 1;
+                    let name = path.file_name().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
+                    if matches!(name.as_str(), "mcp.json" | "mcp.config.json" | "mcp-server.json") {
+                        out.push(path);
+                    }
+                }
+            }
+        }
+        let mut out = Vec::new();
+        let mut left = self.max_files;
+        walk(&self.root, &mut out, &mut left);
+        out
+    }
+
+    async fn list_tools(
+        &self,
+        command: &str,
+        args: &[String],
+    ) -> Result<Vec<(String, String)>, BuilderError> {
+        if !self.allowed_programs.contains(command) {
+            return Ok(Vec::new());
+        }
+        if invalid_program(command) || args.iter().any(|arg| contains_shell_meta(arg)) {
+            return Ok(Vec::new());
+        }
+        let initialize = serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"synergy-m8-discovery","version":"0.1.0"}}
+        });
+        let initialized = serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized","params":{}});
+        let list = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}});
+        let spec = CommandSpec::new(command.to_string())
+            .args(args.to_vec())
+            .profile(ExecutionProfile::ReadOnlyWorkspace)
+            .stdin_data(format!("{}\n{}\n{}\n", initialize, initialized, list));
+        let result = match self.runtime.execute(spec).await {
+            Ok(result) if result.exit_code == 0 => result,
+            _ => return Ok(Vec::new()),
+        };
+        for line in result.stdout.lines() {
+            let Ok(value) = serde_json::from_str::<Value>(line) else { continue };
+            if value.get("id") != Some(&Value::from(2)) { continue; }
+            let Some(items) = value.pointer("/result/tools").and_then(Value::as_array) else { continue };
+            return Ok(items.iter().filter_map(|item| {
+                let name = item.get("name").and_then(Value::as_str)?.to_string();
+                let description = item.get("description").and_then(Value::as_str).unwrap_or("").to_string();
+                Some((name, description))
+            }).collect());
+        }
+        Ok(Vec::new())
+    }
+
+    fn semantic_score(plan: &SelfBuildPlan, name: &str, description: &str) -> i64 {
+        let searchable = format!("{name} {description}").to_ascii_lowercase();
+        let mut score = 0i64;
+        for term in &plan.gap.terms {
+            if searchable.contains(&term.to_ascii_lowercase()) { score += 15; }
+        }
+        for term in plan.gap.suggested_capability.split('.') {
+            if searchable.contains(&term.to_ascii_lowercase()) { score += 25; }
+        }
+        score
+    }
+
+    fn tool_risk(name: &str) -> RiskClass {
+        let lower = name.to_ascii_lowercase();
+        if ["write","create","update","delete","remove","send","publish","execute","run","kill","install"]
+            .iter().any(|needle| lower.contains(needle))
+        {
+            RiskClass::High
+        } else {
+            RiskClass::Medium
+        }
+    }
+}
+
+#[async_trait]
+impl BuildDiscovery for FilesystemMcpDiscovery {
+    async fn discover(&self, plan: &SelfBuildPlan) -> Result<Vec<BuildRequest>, BuilderError> {
+        let mut ranked = Vec::<(i64, BuildRequest)>::new();
+        for config in self.collect_configs() {
+            let Ok(raw) = fs::read_to_string(&config) else { continue };
+            if raw.len() > 1_000_000 { continue; }
+            let Ok(document) = serde_json::from_str::<Value>(&raw) else { continue };
+            let Some(servers) = document.get("mcpServers").and_then(Value::as_object) else { continue };
+            for (server_name, server) in servers {
+                let Some(command) = server.get("command").and_then(Value::as_str) else { continue };
+                let args = server.get("args").and_then(Value::as_array)
+                    .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                let tools = self.list_tools(command, &args).await?;
+                for (tool, description) in tools {
+                    let score = Self::semantic_score(plan, &tool, &description);
+                    if score <= 0 { continue; }
+                    let risk = Self::tool_risk(&tool);
+                    let id_suffix = format!("{server_name}-{tool}").to_ascii_lowercase()
+                        .chars().map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+                        .collect::<String>();
+                    ranked.push((score, BuildRequest {
+                        plugin_id: format!("generated.mcp.{id_suffix}"),
+                        display_name: format!("Generated MCP {server_name}/{tool}"),
+                        capability: plan.gap.suggested_capability.clone(),
+                        source: AdapterSource::McpStdio {
+                            command: command.to_string(),
+                            args: args.clone(),
+                            tool,
+                        },
+                        risk,
+                        requires_approval: risk >= RiskClass::High,
+                        tags: ["generated".to_string(), "mcp".to_string(), format!("server:{server_name}")]
+                            .into_iter().collect(),
+                    }));
+                }
+            }
+        }
+        ranked.sort_by(|a,b| b.0.cmp(&a.0).then_with(|| a.1.plugin_id.cmp(&b.1.plugin_id)));
+        Ok(ranked.into_iter().map(|(_,request)| request).collect())
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct StaticBuildDiscovery {
     pub requests: Vec<BuildRequest>,
