@@ -6,14 +6,184 @@
   "kind": "business",
   "provider": "sidecars/business-runtime",
   "capabilities": [
-    {"name":"business.ceo.plan","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"business.cfo.analyze","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"business.smm.plan","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"business.sales.plan","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},\n    {"name":"business.verify.evidence","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"business.external.publish","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess"]}
+    {
+      "name": "business.ceo.plan",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "business.cfo.analyze",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "business.smm.plan",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "business.sales.plan",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "business.verify.evidence",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "business.external.publish",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": [
+        "NetworkAccess"
+      ]
+    }
   ],
-  "endpoints": [{"transport":"http","address":"http://127.0.0.1:8120"}],
-  "tags": ["business","smm","sales","cfo","ceo"],
+  "endpoints": [
+    {
+      "transport": "http",
+      "address": "http://127.0.0.1:8120"
+    }
+  ],
+  "tags": [
+    "business",
+    "smm",
+    "sales",
+    "cfo",
+    "ceo"
+  ],
   "requires": [],
-  "enabled_by_default": false
+  "enabled_by_default": false,
+  "input_contracts": {
+    "business.ceo.plan": {
+      "type": "object",
+      "properties": {
+        "goal": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "goal"
+      ],
+      "additionalProperties": false
+    },
+    "business.cfo.analyze": {
+      "type": "object",
+      "properties": {
+        "revenue_usd": {
+          "type": "number",
+          "default": 0
+        },
+        "costs": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        },
+        "budget_usd": {
+          "type": "number",
+          "default": 0
+        },
+        "ad_spend_usd": {
+          "type": "number",
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "business.smm.plan": {
+      "type": "object",
+      "properties": {
+        "product": {
+          "type": "string",
+          "default": "продукт"
+        },
+        "audience": {
+          "type": "string",
+          "default": "целевая аудитория"
+        },
+        "objective": {
+          "type": "string",
+          "default": "лиды"
+        },
+        "days": {
+          "type": "integer",
+          "default": 14
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "telegram",
+            "vk",
+            "instagram"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "business.sales.plan": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_score": {
+          "type": "integer",
+          "default": 0
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "business.verify.evidence": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "required",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "business.external.publish": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "capability"
+      ],
+      "additionalProperties": false
+    }
+  }
 }
