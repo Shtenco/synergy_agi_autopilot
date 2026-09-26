@@ -228,9 +228,17 @@ impl CapabilityGraphPlanner {
 #[async_trait]
 impl Planner for CapabilityGraphPlanner {
     async fn plan(&self, request: &GoalRequest) -> Result<Vec<PlannedTask>, String> {
-        let routes = self.graph.route_goal(&request.objective, self.max_routes);
+        let routes = self.graph.route_goal(&request.objective, self.max_routes.saturating_mul(4))
+            .into_iter()
+            .filter(|route| {
+                let name = route.capability.to_ascii_lowercase();
+                !["send","create","update","publish","execute","submit","write","delete","click","fill","run_command"]
+                    .iter().any(|needle| name.contains(needle))
+            })
+            .take(self.max_routes)
+            .collect::<Vec<_>>();
         if routes.is_empty() {
-            return Err("capability graph found no executable providers for goal".into());
+            return Err("capability graph found no safe autonomous providers for goal; use an explicit approved plugin plan for write actions".into());
         }
         routes.into_iter().map(|route| {
             let envelope = json!({
