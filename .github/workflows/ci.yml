@@ -79,5 +79,32 @@ jobs:
         run: python -c "from connector_gateway.app import app; assert app.title.startswith('SYNERGY Connector')"
       - name: Validate capability catalog
         run: python -m json.tool catalog/repositories.json > /dev/null
+      - name: Validate plugin schema
+        run: python -m json.tool schemas/synergy.plugin.v1.schema.json > /dev/null
+      - name: Compile M8 discovery scripts
+        run: python -m py_compile scripts/discover-plugin-surfaces.py scripts/propose-plugin-build.py
+      - name: M8 static self-build smoke
+        shell: bash
+        run: |
+          mkdir -p /tmp/m8-fixture
+          cat > /tmp/m8-fixture/openapi.json <<'JSON'
+          {
+            "openapi":"3.0.0",
+            "servers":[{"url":"https://api.example.com"}],
+            "paths":{
+              "/status":{
+                "get":{"operationId":"getStatus"}
+              }
+            }
+          }
+          JSON
+          python scripts/discover-plugin-surfaces.py /tmp/m8-fixture --out /tmp/m8-discovery.json
+          python scripts/propose-plugin-build.py /tmp/m8-discovery.json \
+            --capability custom.status.read \
+            --plugin-id generated.smoke.status \
+            --name "Smoke Status" \
+            --base-url https://api.example.com \
+            --out /tmp/m8-proposals.json
+          python -c "import json; d=json.load(open('/tmp/m8-proposals.json')); assert any(p.get('ready_to_build') for p in d['proposals'])"
       - name: Compile Python sidecars
         run: python -m compileall -q sidecars/business-runtime/src sidecars/nexus-bridge/src sidecars/connector-gateway/src
