@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use autopilot_automation::CircuitBreaker;
 use autopilot_control_plane::{ApprovalStatus, ControlPlaneStore};
+use autopilot_domain::RiskClass;
 use autopilot_plugins::{PluginAdapter, PluginManifest, PluginRegistry};
 use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
@@ -495,6 +496,16 @@ impl PluginExecutor {
     ) -> Result<PluginResult, PluginRuntimeError> {
         let adapter = manifest.adapter.as_ref()
             .ok_or_else(|| PluginRuntimeError::NoEndpoint(manifest.id.clone()))?;
+        let declared = manifest.capability(&call.capability)
+            .ok_or_else(|| PluginRuntimeError::UnknownCapability {
+                plugin: manifest.id.clone(),
+                capability: call.capability.clone(),
+            })?;
+        let generated_profile = if declared.risk >= RiskClass::High {
+            ExecutionProfile::WorkspaceWrite
+        } else {
+            ExecutionProfile::ReadOnlyWorkspace
+        };
         match adapter {
             PluginAdapter::OpenApi { base_url, operation_id, document } => {
                 let mut payload = json!({
@@ -529,7 +540,7 @@ impl PluginExecutor {
                 }
                 let mut spec = CommandSpec::new(command.clone())
                     .args(args.clone())
-                    .profile(ExecutionProfile::Host);
+                    .profile(generated_profile);
                 spec = self.apply_env_allowlist(&manifest.id, spec);
                 let output = self.mcp_stdio_call(spec, tool, call.input).await?;
                 Ok(PluginResult {
@@ -547,7 +558,7 @@ impl PluginExecutor {
                 }
                 let mut spec = CommandSpec::new(program.clone())
                     .args(args.clone())
-                    .profile(ExecutionProfile::Host)
+                    .profile(generated_profile)
                     .stdin_data(call.input.to_string());
                 if let Some(workspace) = &self.config.local_workspace {
                     spec = spec.cwd(workspace.clone());
