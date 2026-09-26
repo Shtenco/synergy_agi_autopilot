@@ -325,6 +325,9 @@ fn derive_input_contract(source: &AdapterSource) -> Value {
                             }
                         }
                         body_schema = operation.pointer("/requestBody/content/application~1json/schema").cloned();
+                        if operation.pointer("/requestBody/required").and_then(Value::as_bool) == Some(true) {
+                            required.push(Value::String("body".into()));
+                        }
                         break 'outer;
                     }
                 }
