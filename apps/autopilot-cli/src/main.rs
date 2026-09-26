@@ -23,7 +23,7 @@ use autopilot_plugin_builder::{BuildDiscoveryChain, BuildRequest, CandidateStore
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
-use autopilot_semantic_planner::{AdaptiveWorkflowSynthesizer, MappingContext, SemanticArgumentMapper, WorkflowPlan};
+use autopilot_semantic_planner::{AdaptiveWorkflowSynthesizer, CognitivePlanProposal, MappingContext, SemanticArgumentMapper, VerifiedCognitivePlanner, WorkflowPlan};
 use uuid::Uuid;
 
 #[derive(Parser)]
@@ -57,6 +57,11 @@ enum Commands {
     },
     WorkflowPlan {
         #[arg(long)] goal: String,
+        #[arg(long, default_value = "{}")] hints_json: String,
+        #[arg(long, default_value = "null")] memory_json: String,
+    },
+    CognitivePlanVerify {
+        #[arg(long)] proposal: PathBuf,
         #[arg(long, default_value = "{}")] hints_json: String,
         #[arg(long, default_value = "null")] memory_json: String,
     },
@@ -754,6 +759,20 @@ async fn main() -> Result<(), String> {
             println!("{}", serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?);
             if !plan.ready {
                 return Err("workflow dry-run is not ready; inspect unresolved_required/validation_errors".into());
+            }
+        },
+        Commands::CognitivePlanVerify { proposal, hints_json, memory_json } => {
+            let raw = fs::read_to_string(&proposal)
+                .map_err(|error| format!("cannot read cognitive proposal {}: {error}", proposal.display()))?;
+            let proposal: CognitivePlanProposal = serde_json::from_str(&raw)
+                .map_err(|error| format!("invalid cognitive proposal {}: {error}", proposal.display()))?;
+            let registry = initial_plugin_registry()?;
+            let context = semantic_context_from_json(&proposal.goal, &hints_json, &memory_json)?;
+            let plan = VerifiedCognitivePlanner::verify(&proposal, &registry, &context)
+                .map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?);
+            if !plan.ready {
+                return Err("verified cognitive plan is not execution-ready".into());
             }
         },
         Commands::WorkflowRun {
