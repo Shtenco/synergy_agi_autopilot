@@ -244,5 +244,324 @@
       },
       "additionalProperties": false
     }
+  },
+  "output_contracts": {
+    "browser.run_plan": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.navigate": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "navigate"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "status": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "url",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.snapshot": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "snapshot"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "title": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "url",
+              "title",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.click": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "click"
+              },
+              "selector": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "selector",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.fill": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "fill"
+              },
+              "selector": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "selector"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.wait": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "wait_for"
+              },
+              "selector": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "selector"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.screenshot": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "screenshot"
+              },
+              "output": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "output"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    }
   }
 }
