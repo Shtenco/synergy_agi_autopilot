@@ -96,6 +96,8 @@ pub struct PluginManifest {
     pub adapter: Option<PluginAdapter>,
     #[serde(default)]
     pub input_contracts: BTreeMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub output_contracts: BTreeMap<String, serde_json::Value>,
 }
 
 impl PluginManifest {
@@ -171,16 +173,21 @@ impl PluginManifest {
             }
         }
 
-        for (capability, schema) in &self.input_contracts {
-            if self.capability(capability).is_none() {
-                return Err(PluginError::InvalidManifest(format!(
-                    "input contract references undeclared capability: {capability}"
-                )));
-            }
-            if !schema.is_object() {
-                return Err(PluginError::InvalidManifest(format!(
-                    "input contract must be a JSON object schema: {capability}"
-                )));
+        for (kind, contracts) in [
+            ("input", &self.input_contracts),
+            ("output", &self.output_contracts),
+        ] {
+            for (capability, schema) in contracts {
+                if self.capability(capability).is_none() {
+                    return Err(PluginError::InvalidManifest(format!(
+                        "{kind} contract references undeclared capability: {capability}"
+                    )));
+                }
+                if !schema.is_object() {
+                    return Err(PluginError::InvalidManifest(format!(
+                        "{kind} contract must be a JSON object schema: {capability}"
+                    )));
+                }
             }
         }
 
@@ -202,6 +209,10 @@ impl PluginManifest {
 
     pub fn input_contract(&self, capability: &str) -> Option<&serde_json::Value> {
         self.input_contracts.get(capability)
+    }
+
+    pub fn output_contract(&self, capability: &str) -> Option<&serde_json::Value> {
+        self.output_contracts.get(capability)
     }
 }
 
@@ -326,6 +337,7 @@ mod tests {
             enabled_by_default: false,
             adapter: None,
             input_contracts: BTreeMap::new(),
+            output_contracts: BTreeMap::new(),
         }
     }
 
