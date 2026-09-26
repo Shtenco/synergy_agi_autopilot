@@ -23,7 +23,7 @@ use autopilot_plugin_builder::{BuildDiscoveryChain, BuildRequest, CandidateStore
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
-use autopilot_semantic_planner::{AdaptiveWorkflowSynthesizer, CognitivePlanProposal, MappingContext, SemanticArgumentMapper, VerifiedCognitivePlanner, WorkflowPlan};
+use autopilot_semantic_planner::{cognitive_planner_prompt, AdaptiveWorkflowSynthesizer, CognitivePlanProposal, MappingContext, SemanticArgumentMapper, VerifiedCognitivePlanner, WorkflowPlan};
 use uuid::Uuid;
 
 #[derive(Parser)]
@@ -62,6 +62,11 @@ enum Commands {
     },
     CognitivePlanVerify {
         #[arg(long)] proposal: PathBuf,
+        #[arg(long, default_value = "{}")] hints_json: String,
+        #[arg(long, default_value = "null")] memory_json: String,
+    },
+    CognitivePlan {
+        #[arg(long)] goal: String,
         #[arg(long, default_value = "{}")] hints_json: String,
         #[arg(long, default_value = "null")] memory_json: String,
     },
@@ -766,6 +771,47 @@ async fn main() -> Result<(), String> {
             println!("{}", serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?);
             if !plan.ready {
                 return Err("workflow dry-run is not ready; inspect unresolved_required/validation_errors".into());
+            }
+        },
+        Commands::CognitivePlan { goal, hints_json, memory_json } => {
+            let registry = initial_plugin_registry()?;
+            let prompt = cognitive_planner_prompt(&goal, &registry);
+            let mut config = PluginRuntimeConfig::default();
+            config.timeout_ms = Some(120_000);
+            config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
+            let executor = PluginExecutor::new(
+                registry.clone(),
+                PolicyEngine::default(),
+                Arc::new(NativeRuntime::default()),
+                config,
+            );
+            let result = executor.execute(PluginCall {
+                plugin_id:"intelligence.nexus".into(),
+                capability:"intelligence.reason".into(),
+                input:serde_json::json!({"prompt":prompt,"context":{"mode":"cognitive-plan-v1"}}),
+                approved:false,
+            }).await.map_err(|error| error.to_string())?;
+
+            let proposal_value = result.output.get("result").cloned()
+                .ok_or_else(|| "NEXUS cognitive planner returned no result".to_string())?;
+            let proposal: CognitivePlanProposal = if let Some(text) = proposal_value.as_str() {
+                serde_json::from_str(text)
+                    .map_err(|error| format!("NEXUS returned invalid cognitive plan JSON: {error}"))?
+            } else if let Some(text) = proposal_value.get("text").and_then(serde_json::Value::as_str) {
+                serde_json::from_str(text)
+                    .map_err(|error| format!("NEXUS result.text is not a valid cognitive plan: {error}"))?
+            } else {
+                serde_json::from_value(proposal_value)
+                    .map_err(|error| format!("NEXUS result does not match cognitive plan schema: {error}"))?
+            };
+
+            let context = semantic_context_from_json(&goal, &hints_json, &memory_json)?;
+            let plan = VerifiedCognitivePlanner::verify(&proposal, &registry, &context)
+                .map_err(|error| error.to_string())?;
+            println!("COGNITIVE_PROPOSAL\n{}", serde_json::to_string_pretty(&proposal).map_err(|error| error.to_string())?);
+            println!("VERIFIED_COGNITIVE_DAG\n{}", serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?);
+            if !plan.ready {
+                return Err("verified cognitive plan is not execution-ready".into());
             }
         },
         Commands::CognitivePlanVerify { proposal, hints_json, memory_json } => {
