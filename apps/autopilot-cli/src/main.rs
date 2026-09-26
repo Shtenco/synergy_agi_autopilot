@@ -19,7 +19,7 @@ use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, Fle
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
-use autopilot_plugin_builder::{BuildRequest, CandidateStore, PluginBuilder, SandboxQualifier, SemanticGapDetector};
+use autopilot_plugin_builder::{BuildRequest, CandidateStore, FilesystemOpenApiDiscovery, PluginBuilder, SandboxQualifier, SelfBuildCoordinator, SelfBuildOutcome, SelfBuildPolicy, SemanticGapDetector};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
@@ -66,6 +66,18 @@ enum Commands {
     },
     GraphGoal {
         #[arg(long)] goal: String,
+        #[arg(long, default_value_t = 3)] max_routes: usize,
+        #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long)] control_db: Option<PathBuf>,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
+        #[arg(long = "allow-generated-program")] allow_generated_program: Vec<String>,
+    },
+    UniversalGoal {
+        #[arg(long)] goal: String,
+        #[arg(long)] discovery_root: PathBuf,
+        #[arg(long)] base_url: Option<String>,
+        #[arg(long, default_value = ".autopilot/quarantine")] quarantine: PathBuf,
+        #[arg(long, default_value = ".autopilot/generated-plugins")] generated_plugins: PathBuf,
         #[arg(long, default_value_t = 3)] max_routes: usize,
         #[arg(long)] workspace: Option<PathBuf>,
         #[arg(long)] control_db: Option<PathBuf>,
@@ -656,6 +668,86 @@ async fn main() -> Result<(), String> {
             let summary = engine.run(goal).await.map_err(|error| error.to_string())?;
             println!(
                 "final_state={:?}\tevidence={}\taudit_events={}\tblocked_by_policy={}",
+                summary.final_state,
+                summary.evidence.len(),
+                audit.list_by_correlation(summary.correlation_id).await?.len(),
+                summary.blocked_by_policy,
+            );
+        },
+        Commands::UniversalGoal {
+            goal, discovery_root, base_url, quarantine, generated_plugins,
+            max_routes, workspace, control_db, allow_env, allow_generated_program
+        } => {
+            let mut graph = initial_capability_graph()?;
+            let mut registry = initial_plugin_registry()?;
+
+            if SemanticGapDetector::detect(&graph, &goal).is_some() {
+                let discovery = FilesystemOpenApiDiscovery::new(discovery_root, base_url);
+                let qualifier = SandboxQualifier::new(
+                    Arc::new(NativeRuntime::default()),
+                    BTreeSet::new(),
+                );
+                let coordinator = SelfBuildCoordinator::new(
+                    CandidateStore::new(quarantine),
+                    qualifier,
+                    discovery,
+                    SelfBuildPolicy::default(),
+                    generated_plugins.clone(),
+                );
+                let outcome = coordinator.ensure_for_goal(&graph, &goal).await
+                    .map_err(|error| error.to_string())?;
+                println!(
+                    "self_build_outcome={}\n",
+                    serde_json::to_string_pretty(&outcome).map_err(|error| error.to_string())?
+                );
+
+                match outcome {
+                    SelfBuildOutcome::Promoted { manifest_path, .. } => {
+                        let raw = fs::read_to_string(&manifest_path)
+                            .map_err(|error| format!("cannot read promoted manifest {}: {error}", manifest_path.display()))?;
+                        let manifest = parse_manifest_json(&raw).map_err(|error| error.to_string())?;
+                        registry.upsert(manifest).map_err(|error| error.to_string())?;
+                        registry.validate_dependencies().map_err(|error| error.to_string())?;
+                        graph.attach_plugins(&registry);
+                    }
+                    SelfBuildOutcome::ExistingProvider => {}
+                    SelfBuildOutcome::DiscoveryEmpty { .. }
+                    | SelfBuildOutcome::CandidateRejected { .. }
+                    | SelfBuildOutcome::QualifiedAwaitingPromotion { .. } => {
+                        return Err("self-build did not yield an auto-promoted executable provider".into());
+                    }
+                }
+            }
+
+            let mut config = PluginRuntimeConfig::default();
+            config.local_workspace = workspace;
+            config.control_plane_db = control_db;
+            config.generated_program_allowlist = allow_generated_program.iter().cloned().collect();
+            config.timeout_ms = Some(120_000);
+            config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
+            config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
+            config.bearer_token_env.insert("business.auto-company".into(), "SYNERGY_API_TOKEN".into());
+            config.bearer_token_env.insert("connector.gateway".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.email".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.calendar".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.crm".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            for plugin_id in registry.list().map(|manifest| manifest.id.clone()).collect::<Vec<_>>() {
+                if !allow_env.is_empty() {
+                    config.env_allowlist.insert(plugin_id, allow_env.clone());
+                }
+            }
+
+            let executor = Arc::new(PluginExecutor::new(
+                registry,
+                PolicyEngine::default(),
+                Arc::new(NativeRuntime::default()),
+                config,
+            ));
+            let audit = Arc::new(InMemoryAuditStore::default());
+            let engine = GraphGoalEngine::new(Arc::new(graph), audit.clone(), executor, max_routes);
+            let summary = engine.run(goal).await.map_err(|error| error.to_string())?;
+            println!(
+                "UNIVERSAL_GOAL\nfinal_state={:?}\nevidence={}\naudit_events={}\nblocked_by_policy={}",
                 summary.final_state,
                 summary.evidence.len(),
                 audit.list_by_correlation(summary.correlation_id).await?.len(),
