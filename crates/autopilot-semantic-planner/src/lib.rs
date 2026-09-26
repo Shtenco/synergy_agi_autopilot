@@ -600,12 +600,9 @@ impl AdaptiveWorkflowSynthesizer {
         let mut unresolved_objectives = Vec::new();
 
         for clause in &clauses {
-            let routes = graph.route_goal(clause, 20);
-            let selected = routes.iter()
+            let selected = graph.route_goal(clause, 20).into_iter()
                 .find(|route| registry.get(&route.provider)
-                    .is_some_and(|manifest| manifest.input_contract(&route.capability).is_some()))
-                .cloned()
-                .or_else(|| routes.into_iter().next());
+                    .is_some_and(|manifest| manifest.input_contract(&route.capability).is_some()));
             let Some(route) = selected else {
                 unresolved_objectives.push(clause.clone());
                 continue;
@@ -618,11 +615,10 @@ impl AdaptiveWorkflowSynthesizer {
                 unresolved_objectives.push(clause.clone());
                 continue;
             };
-            let declared = manifest.input_contract(&route.capability).cloned();
-            let contract_declared = declared.is_some();
-            let contract = declared.unwrap_or_else(|| serde_json::json!({
-                "type":"object","properties":{},"additionalProperties":true
-            }));
+            let Some(contract) = manifest.input_contract(&route.capability).cloned() else {
+                unresolved_objectives.push(clause.clone());
+                continue;
+            };
             let mut local_context = context.clone();
             local_context.goal = clause.clone();
             let mapped = SemanticArgumentMapper::map(&contract, &local_context)?;
@@ -639,7 +635,7 @@ impl AdaptiveWorkflowSynthesizer {
                 capability: route.capability,
                 risk: capability.risk,
                 input_contract: contract,
-                contract_declared,
+                contract_declared: true,
                 mapped_arguments: mapped.arguments,
                 unresolved_required: mapped.unresolved_required,
                 validation_errors: mapped.validation_errors,
