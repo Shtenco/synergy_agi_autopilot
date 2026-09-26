@@ -14,7 +14,18 @@ Schema:
 
 `synergy.repository-capability-catalog.v1`
 
-The seed uses conservative name-based tags/capabilities. It does not pretend that uninspected repositories expose executable APIs.
+The catalog is now evidence-enriched for all 73 repositories:
+- 70 repositories from default-branch README evidence;
+- 2 GitHub Pages repositories from `index.html`;
+- `sinergy_super_app` from internal documentation + mobile tree evidence.
+
+The catalog remains conservative: repositories without a demonstrated executable interface are not advertised as executable plugins.
+
+Catalog counters:
+- `repository_count = 73`
+- `readme_enriched_count = 70`
+- `alternate_evidence_count = 3`
+- `evidence_enriched_count = 73`
 
 ## Automatic enrichment
 
