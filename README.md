@@ -10,7 +10,14 @@ Current integration status:
 - CLI command `open-autopilot plugins` added for capability discovery;
 - external side effects remain policy/approval scoped.
 
-See `docs/SYNERGY_AI_AUTOPILOT_V1_INTEGRATION.md` and `docs/architecture/plugin-fabric-v1.md`.
+See:
+- `docs/SYNERGY_AI_AUTOPILOT_V1_INTEGRATION.md`
+- `docs/M5_UNIVERSAL_EXECUTION_FABRIC_STATUS.md`
+- `docs/M6_FULL_AUTOMATION_STATUS.md`
+- `docs/M7_CAPABILITY_GRAPH_STATUS.md`
+- `docs/architecture/plugin-fabric-v1.md`
+
+Current convergence line also includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, and a Capability Graph seeded from all 73 currently accessible Shtenco repositories.
 
 ---
 
