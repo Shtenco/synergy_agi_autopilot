@@ -1,0 +1,14 @@
+[package]
+name = "autopilot-automation-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+autopilot-automation = { path = "../autopilot-automation" }
+autopilot-control-plane = { path = "../autopilot-control-plane" }
+autopilot-domain = { path = "../autopilot-domain" }
+autopilot-missions = { path = "../autopilot-missions" }
+autopilot-store = { path = "../autopilot-store" }
+chrono.workspace = true
+serde_json.workspace = true
