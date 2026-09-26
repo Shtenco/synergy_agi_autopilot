@@ -19,7 +19,7 @@ See:
 - `docs/M9_SEMANTIC_ARGUMENT_MAPPER_STATUS.md`
 - `docs/architecture/plugin-fabric-v1.md`
 
-Current convergence line includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, a Capability Graph over all 73 currently accessible Shtenco repositories, a self-building plugin fabric, and M9 typed semantic argument/workflow synthesis.
+Current convergence line includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, a Capability Graph over all 73 currently accessible Shtenco repositories, a self-building plugin fabric, M9 typed semantic inputs/workflows, and M10 verified typed outputs with a cognitive DAG planner.
 
 ---
 
@@ -371,3 +371,71 @@ Canonical qualification:
 ```
 
 This verifier now covers M5 through M9.
+
+
+## M10 — Verified Cognitive Planner + Typed DAG
+
+Autopilot now treats outputs as typed contracts as well as inputs.
+
+```text
+input_contract
+  -> plugin
+  -> output_contract
+  -> typed dataflow edges
+  -> verified DAG
+  -> next step
+```
+
+M10 adds:
+
+- per-capability `output_contracts`;
+- post-execution output validation in `PluginExecutor`;
+- OpenAPI/MCP/declarative-CLI output contract discovery;
+- exact MCP output normalization;
+- typed schema assignability;
+- ambiguity rejection;
+- runtime-verified typed bindings;
+- dynamic topological DAG ordering;
+- `synergy.cognitive-plan.v1`;
+- NEXUS model-assisted plan proposals behind a deterministic verifier.
+
+A model is allowed to propose only:
+
+```text
+step id
+objective
+plugin_id
+capability
+hints
+```
+
+It cannot authoritatively set risk, approval, budgets, dependencies, credentials, or execution authority.
+
+Useful commands:
+
+```text
+open-autopilot cognitive-plan
+open-autopilot cognitive-plan-verify
+open-autopilot universal-goal
+```
+
+Canonical offline M10 fixture:
+
+```text
+examples/m10/sales-to-file-cognitive-plan.json
+```
+
+It proves a typed edge from:
+
+```text
+business.sales.compose_offer.result.message
+  -> computer.write_file.content
+```
+
+Canonical qualification remains:
+
+```powershell
+.\scripts\verify-autopilot.ps1
+```
+
+The verifier now covers M5 through M10.
