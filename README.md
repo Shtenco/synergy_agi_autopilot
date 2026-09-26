@@ -19,7 +19,7 @@ See:
 - `docs/M9_SEMANTIC_ARGUMENT_MAPPER_STATUS.md`
 - `docs/architecture/plugin-fabric-v1.md`
 
-Current convergence line also includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, and a Capability Graph seeded from all 73 currently accessible Shtenco repositories.
+Current convergence line includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, a Capability Graph over all 73 currently accessible Shtenco repositories, a self-building plugin fabric, and M9 typed semantic argument/workflow synthesis.
 
 ---
 
@@ -313,3 +313,61 @@ Canonical qualification:
 ```powershell
 .\scripts\verify-autopilot.ps1
 ```
+
+
+## M9 — Semantic Arguments + Adaptive Workflows
+
+Autopilot now has a transport-neutral typed input layer.
+
+The canonical path is:
+
+```text
+Human Goal
+  -> Capability Graph
+  -> typed provider?
+       no -> M8 Self-Build Fabric
+       yes
+  -> input_contract
+  -> Semantic Argument Mapper
+  -> dry-run validation
+  -> Adaptive Workflow Synthesizer
+  -> approval / budget gates
+  -> sequential execution
+  -> live prior-output remapping
+  -> final contract validation
+  -> verification
+```
+
+M9 input contracts work across:
+
+- OpenAPI parameters and request bodies;
+- MCP `inputSchema`;
+- declarative CLI descriptors;
+- typed built-in capabilities.
+
+Key operator commands:
+
+```text
+open-autopilot argument-map
+open-autopilot workflow-plan
+open-autopilot workflow-run
+open-autopilot universal-goal
+```
+
+The workflow engine fails closed when:
+
+- a required argument cannot be resolved;
+- a goal clause has no mapped capability;
+- a capability has no typed contract;
+- schema validation fails;
+- an approval-required step has no explicit approval.
+
+Generated and built-in plugin calls cross the same final PluginExecutor input-contract validation boundary.
+
+Canonical qualification:
+
+```powershell
+.\scripts\verify-autopilot.ps1
+```
+
+This verifier now covers M5 through M9.
