@@ -6,6 +6,8 @@ import sqlite3
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -101,6 +103,29 @@ def oauth_token(config: dict[str, Any]) -> str:
     if not token:
         raise HTTPException(502, "OAuth server returned no access_token")
     return str(token)
+
+
+def persist_autopilot_event(topic: str, payload: dict[str, Any]) -> str | None:
+    raw = os.getenv("AUTOPILOT_CONTROL_DB", "").strip()
+    if not raw:
+        return None
+    event_id = str(uuid.uuid4())
+    occurred_at = datetime.now(timezone.utc).isoformat()
+    try:
+        conn = sqlite3.connect(raw, timeout=10)
+        try:
+            conn.execute(
+                """INSERT INTO automation_events(
+                    id,topic,payload_json,occurred_at,status,attempts,next_attempt_at
+                ) VALUES(?,?,?,?, 'pending',0,?)""",
+                (event_id, topic, json.dumps(payload, ensure_ascii=False), occurred_at, occurred_at),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:
+        raise HTTPException(503, f"failed to persist Autopilot event: {type(exc).__name__}: {exc}") from exc
+    return event_id
 
 
 def queue_db() -> sqlite3.Connection:
@@ -250,10 +275,12 @@ def queue_consume(body: QueueConsumeIn, authorization: str | None = Header(defau
 @app.post("/v1/webhooks/{topic:path}")
 def webhook(topic: str, payload: dict[str, Any], authorization: str | None = Header(default=None)):
     guard(authorization)
+    event_topic = f"webhook.{topic}"
     with queue_db() as conn:
         cur = conn.execute("INSERT INTO webhooks(topic,payload_json) VALUES(?,?)", (topic, json.dumps(payload, ensure_ascii=False)))
-        conn.execute("INSERT INTO queue(topic,body_json) VALUES(?,?)", (f"webhook.{topic}", json.dumps(payload, ensure_ascii=False)))
-    return {"accepted": True, "id": cur.lastrowid, "topic": topic}
+        conn.execute("INSERT INTO queue(topic,body_json) VALUES(?,?)", (event_topic, json.dumps(payload, ensure_ascii=False)))
+    autopilot_event_id = persist_autopilot_event(event_topic, payload)
+    return {"accepted": True, "id": cur.lastrowid, "topic": topic, "autopilot_event_id": autopilot_event_id}
 
 
 def main() -> None:
