@@ -388,18 +388,27 @@ impl PluginExecutor {
                 call.capability, status, state
             )));
         }
+        let parsed_result = state.get("result_json").and_then(Value::as_str)
+            .map(|raw| serde_json::from_str::<Value>(raw)
+                .map_err(|error| PluginRuntimeError::Http(format!("invalid result_json: {error}"))))
+            .transpose()?;
+
         if call.capability == "business.verify.evidence" {
-            let result_json = state.get("result_json").and_then(Value::as_str)
+            let verified = parsed_result.as_ref()
                 .ok_or_else(|| PluginRuntimeError::Http("verifier returned no result_json".into()))?;
-            let verified: Value = serde_json::from_str(result_json)
-                .map_err(|error| PluginRuntimeError::Http(format!("invalid verifier result_json: {error}")))?;
             if verified.get("verified").and_then(Value::as_bool) != Some(true) {
                 return Err(PluginRuntimeError::Http(format!("evidence verifier failed: {verified}")));
             }
         }
+
+        let mut output = state;
+        if let (Some(result), Some(object)) = (parsed_result, output.as_object_mut()) {
+            object.insert("result".into(), result);
+        }
+
         Ok(PluginResult {
             plugin_id: manifest.id.clone(), capability: call.capability,
-            transport: "http-loopback+synergy.capability.v1".into(), output: state,
+            transport: "http-loopback+synergy.capability.v1".into(), output,
         })
     }
 
