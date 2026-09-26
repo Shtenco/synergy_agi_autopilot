@@ -128,6 +128,9 @@ impl PluginExecutor {
             "business.capability.runtime" => self.call_business_runtime(manifest, call).await,
             "business.auto-company" => self.call_auto_company(manifest, call).await,
             "browser.local.playwright" => self.call_browser(manifest, call).await,
+            "connector.gateway" | "capability.email" | "capability.calendar" | "capability.crm" => {
+                self.call_connector_gateway(manifest, call).await
+            }
             _ => Err(PluginRuntimeError::NoEndpoint(manifest.id.clone())),
         };
 
@@ -394,6 +397,40 @@ impl PluginExecutor {
         Ok(PluginResult {
             plugin_id: manifest.id.clone(), capability: call.capability,
             transport: "node+playwright".into(), output,
+        })
+    }
+
+    async fn call_connector_gateway(
+        &self,
+        manifest: &PluginManifest,
+        call: PluginCall,
+    ) -> Result<PluginResult, PluginRuntimeError> {
+        let path = match (manifest.id.as_str(), call.capability.as_str()) {
+            ("connector.gateway", "http.request") => "/v1/http",
+            ("connector.gateway", "openapi.call") => "/v1/openapi",
+            ("connector.gateway", "database.query") => "/v1/db/query",
+            ("connector.gateway", "queue.publish") => "/v1/queue/publish",
+            ("connector.gateway", "queue.consume") => "/v1/queue/consume",
+            ("capability.email", "email.send" | "email.read") => "/v1/openapi",
+            ("capability.calendar", "calendar.read" | "calendar.event.create" | "calendar.event.update") => "/v1/openapi",
+            ("capability.crm", "crm.read" | "crm.record.create" | "crm.record.update") => "/v1/openapi",
+            _ => return Err(PluginRuntimeError::UnknownCapability {
+                plugin: manifest.id.clone(),
+                capability: call.capability,
+            }),
+        };
+        let output = self.http_json(
+            &manifest.id,
+            "http://127.0.0.1:8150",
+            "POST",
+            path,
+            Some(call.input.clone()),
+        ).await?;
+        Ok(PluginResult {
+            plugin_id: manifest.id.clone(),
+            capability: call.capability,
+            transport: "connector-gateway".into(),
+            output,
         })
     }
 
