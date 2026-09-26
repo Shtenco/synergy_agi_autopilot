@@ -47,12 +47,46 @@ pub enum SemanticError {
     EmptyWorkflow,
 }
 
+fn resolve_local_schema_refs(schema: &Value) -> Value {
+    fn resolve(root: &Value, node: &Value, depth: usize) -> Value {
+        if depth >= 12 { return node.clone(); }
+        match node {
+            Value::Object(map) => {
+                if let Some(reference) = map.get("$ref").and_then(Value::as_str) {
+                    if let Some(pointer) = reference.strip_prefix('#') {
+                        if let Some(target) = root.pointer(pointer) {
+                            let mut resolved = resolve(root, target, depth + 1);
+                            if let Some(object) = resolved.as_object_mut() {
+                                for (key, value) in map {
+                                    if key != "$ref" {
+                                        object.insert(key.clone(), resolve(root, value, depth + 1));
+                                    }
+                                }
+                            }
+                            return resolved;
+                        }
+                    }
+                }
+                Value::Object(map.iter()
+                    .map(|(key, value)| (key.clone(), resolve(root, value, depth + 1)))
+                    .collect())
+            }
+            Value::Array(items) => Value::Array(items.iter()
+                .map(|item| resolve(root, item, depth + 1))
+                .collect()),
+            other => other.clone(),
+        }
+    }
+    resolve(schema, schema, 0)
+}
+
 pub struct JsonContractValidator;
 
 impl JsonContractValidator {
     pub fn validate(schema: &Value, value: &Value) -> Vec<String> {
+        let resolved = resolve_local_schema_refs(schema);
         let mut errors = Vec::new();
-        validate_at(schema, value, "$", &mut errors);
+        validate_at(&resolved, value, "$", &mut errors);
         errors
     }
 }
@@ -189,7 +223,8 @@ pub struct SemanticArgumentMapper;
 
 impl SemanticArgumentMapper {
     pub fn map(schema: &Value, context: &MappingContext) -> Result<MappingResult, SemanticError> {
-        let schema_object = schema.as_object().ok_or(SemanticError::ContractNotObject)?;
+        let resolved_schema = resolve_local_schema_refs(schema);
+        let schema_object = resolved_schema.as_object().ok_or(SemanticError::ContractNotObject)?;
         let properties = schema_object.get("properties").and_then(Value::as_object)
             .cloned().unwrap_or_default();
         let required = schema_object.get("required").and_then(Value::as_array)
@@ -209,7 +244,7 @@ impl SemanticArgumentMapper {
             .filter(|field| !arguments.contains_key(field))
             .collect::<BTreeSet<_>>();
         let value = Value::Object(arguments);
-        let validation_errors = JsonContractValidator::validate(schema, &value);
+        let validation_errors = JsonContractValidator::validate(&resolved_schema, &value);
 
         Ok(MappingResult {
             arguments: value,
@@ -726,6 +761,28 @@ mod tests {
         ).unwrap();
         assert_eq!(mapped.arguments["client_id"], "abc-42");
         assert!(mapped.valid());
+    }
+
+    #[test]
+    fn resolves_local_json_schema_refs() {
+        let schema = serde_json::json!({
+            "type":"object",
+            "$defs":{
+                "Email":{"type":"string","format":"email"}
+            },
+            "properties":{
+                "to":{"$ref":"#/$defs/Email"}
+            },
+            "required":["to"]
+        });
+        assert!(JsonContractValidator::validate(
+            &schema,
+            &serde_json::json!({"to":"client@example.com"})
+        ).is_empty());
+        assert!(!JsonContractValidator::validate(
+            &schema,
+            &serde_json::json!({"to":"not-an-email"})
+        ).is_empty());
     }
 
     #[test]
