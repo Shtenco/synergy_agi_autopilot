@@ -98,5 +98,98 @@
       ],
       "additionalProperties": false
     }
+  },
+  "output_contracts": {
+    "computer.remote.list_dir": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "file",
+                  "dir"
+                ]
+              },
+              "size": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "size"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "path",
+        "entries"
+      ],
+      "additionalProperties": true
+    },
+    "computer.remote.read_file": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "size",
+        "text"
+      ],
+      "additionalProperties": true
+    },
+    "computer.remote.run": {
+      "type": "object",
+      "properties": {
+        "returncode": {
+          "type": "integer"
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "returncode",
+        "stdout",
+        "stderr",
+        "truncated"
+      ],
+      "additionalProperties": true
+    }
   }
 }
