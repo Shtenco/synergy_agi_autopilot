@@ -144,6 +144,9 @@ fn resolve_semantic_plugin_input(value: Value, context: &[Value]) -> Result<Valu
     let seed = map.remove("$semantic_hints")
         .and_then(|value| value.as_object().cloned())
         .unwrap_or_default();
+    let control = map.into_iter()
+        .filter(|(key, _)| key.starts_with('_'))
+        .collect::<serde_json::Map<_,_>>();
     let hints = seed.into_iter().collect::<std::collections::BTreeMap<_,_>>();
     let mapping = SemanticArgumentMapper::map(
         &contract,
@@ -161,7 +164,12 @@ fn resolve_semantic_plugin_input(value: Value, context: &[Value]) -> Result<Valu
             mapping.validation_errors
         ));
     }
-    Ok(mapping.arguments)
+    let mut arguments = mapping.arguments.as_object().cloned()
+        .ok_or_else(|| "semantic mapper did not return an object".to_string())?;
+    for (key, value) in control {
+        arguments.insert(key, value);
+    }
+    Ok(Value::Object(arguments))
 }
 
 #[async_trait]
