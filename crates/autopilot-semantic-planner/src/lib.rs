@@ -401,6 +401,7 @@ pub struct WorkflowStep {
     pub capability: String,
     pub risk: RiskClass,
     pub input_contract: Value,
+    pub contract_declared: bool,
     pub mapped_arguments: Value,
     pub unresolved_required: BTreeSet<String>,
     pub validation_errors: Vec<String>,
@@ -410,7 +411,8 @@ pub struct WorkflowStep {
 
 impl WorkflowStep {
     pub fn ready(&self) -> bool {
-        self.validation_errors.is_empty()
+        self.contract_declared
+            && self.validation_errors.is_empty()
             && (self.unresolved_required.is_empty() || !self.depends_on.is_empty())
     }
 
@@ -438,28 +440,36 @@ impl AdaptiveWorkflowSynthesizer {
         let clauses = split_goal(goal);
         let mut steps = Vec::new();
 
-        for (index, clause) in clauses.iter().enumerate() {
+        for clause in &clauses {
             let Some(route) = graph.route_goal(clause, 1).into_iter().next() else { continue };
             let Some(manifest) = registry.get(&route.provider) else { continue };
             let Some(capability) = manifest.capability(&route.capability) else { continue };
-            let contract = manifest.input_contract(&route.capability)
-                .cloned().unwrap_or_else(|| serde_json::json!({
-                    "type":"object","properties":{},"additionalProperties":true
-                }));
+            let declared = manifest.input_contract(&route.capability).cloned();
+            let contract_declared = declared.is_some();
+            let contract = declared.unwrap_or_else(|| serde_json::json!({
+                "type":"object","properties":{},"additionalProperties":true
+            }));
             let mut local_context = context.clone();
             local_context.goal = clause.clone();
             let mapped = SemanticArgumentMapper::map(&contract, &local_context)?;
+            let step_number = steps.len() + 1;
+            let depends_on = if steps.is_empty() {
+                Vec::new()
+            } else {
+                vec![steps.last().map(|step: &WorkflowStep| step.id.clone()).unwrap()]
+            };
             steps.push(WorkflowStep {
-                id: format!("step-{}", index + 1),
+                id: format!("step-{step_number}"),
                 objective: clause.clone(),
                 plugin_id: manifest.id.clone(),
                 capability: route.capability,
                 risk: capability.risk,
                 input_contract: contract,
+                contract_declared,
                 mapped_arguments: mapped.arguments,
                 unresolved_required: mapped.unresolved_required,
                 validation_errors: mapped.validation_errors,
-                depends_on: if index == 0 { Vec::new() } else { vec![format!("step-{index}")] },
+                depends_on,
                 requires_approval: capability.requires_approval,
             });
         }
