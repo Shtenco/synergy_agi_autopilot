@@ -289,6 +289,8 @@ pub struct BuildRequest {
     pub requires_approval: bool,
     #[serde(default)]
     pub input_contract: Option<Value>,
+    #[serde(default)]
+    pub output_contract: Option<Value>,
     pub tags: BTreeSet<String>,
 }
 
@@ -356,6 +358,15 @@ impl PluginBuilder {
                 );
                 contracts
             },
+            output_contracts: {
+                let mut contracts = std::collections::BTreeMap::new();
+                if let Some(contract) = request.output_contract.clone()
+                    .or_else(|| derive_output_contract(&request.source))
+                {
+                    contracts.insert(request.capability.clone(), contract);
+                }
+                contracts
+            },
         };
         manifest.validate().map_err(|error| BuilderError::Invalid(error.to_string()))?;
         Ok(PluginCandidate {
@@ -367,6 +378,40 @@ impl PluginBuilder {
             created_at: Utc::now(),
             qualification: None,
         })
+    }
+}
+
+fn derive_output_contract(source: &AdapterSource) -> Option<Value> {
+    match source {
+        AdapterSource::OpenApi { operation_id, document, .. } => {
+            let paths = document.get("paths")?.as_object()?;
+            for item in paths.values().filter_map(Value::as_object) {
+                for operation in item.values().filter_map(Value::as_object) {
+                    if operation.get("operationId").and_then(Value::as_str) != Some(operation_id) {
+                        continue;
+                    }
+                    let responses = operation.get("responses")?.as_object()?;
+                    let mut codes = responses.keys().cloned().collect::<Vec<_>>();
+                    codes.sort();
+                    for code in codes {
+                        if !(code.starts_with('2') || code == "default") { continue; }
+                        let response = responses.get(&code)?;
+                        let content = response.get("content").and_then(Value::as_object);
+                        let media = content.and_then(|content| {
+                            content.get("application/json")
+                                .or_else(|| content.iter()
+                                    .find(|(media, _)| media.contains("json"))
+                                    .map(|(_, value)| value))
+                        });
+                        if let Some(schema) = media.and_then(|value| value.get("schema")) {
+                            return Some(resolve_document_schema_refs(document, schema, 0));
+                        }
+                    }
+                }
+            }
+            None
+        }
+        AdapterSource::McpStdio { .. } | AdapterSource::Cli { .. } => None,
     }
 }
 
@@ -880,6 +925,7 @@ impl FilesystemOpenApiDiscovery {
                     risk,
                     requires_approval: risk >= RiskClass::High,
                     input_contract: None,
+                    output_contract: None,
                     tags: ["generated".to_string(), "openapi".to_string(), format!("source:{}", file.display())]
                         .into_iter().collect(),
                 };
@@ -981,7 +1027,7 @@ impl FilesystemMcpDiscovery {
         &self,
         command: &str,
         args: &[String],
-    ) -> Result<Vec<(String, String, Value)>, BuilderError> {
+    ) -> Result<Vec<(String, String, Value, Option<Value>)>, BuilderError> {
         if !self.allowed_programs.contains(command) {
             return Ok(Vec::new());
         }
@@ -1015,7 +1061,8 @@ impl FilesystemMcpDiscovery {
                         "properties":{},
                         "additionalProperties":true
                     }));
-                Some((name, description, input_schema))
+                let output_schema = item.get("outputSchema").cloned();
+                Some((name, description, input_schema, output_schema))
             }).collect());
         }
         Ok(Vec::new())
@@ -1060,7 +1107,7 @@ impl BuildDiscovery for FilesystemMcpDiscovery {
                     .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>())
                     .unwrap_or_default();
                 let tools = self.list_tools(command, &args).await?;
-                for (tool, description, input_schema) in tools {
+                for (tool, description, input_schema, output_schema) in tools {
                     let score = Self::semantic_score(plan, &tool, &description);
                     if score <= 0 { continue; }
                     let risk = Self::tool_risk(&tool);
@@ -1079,6 +1126,7 @@ impl BuildDiscovery for FilesystemMcpDiscovery {
                         risk,
                         requires_approval: risk >= RiskClass::High,
                         input_contract: Some(input_schema),
+                        output_contract: output_schema,
                         tags: ["generated".to_string(), "mcp".to_string(), format!("server:{server_name}")]
                             .into_iter().collect(),
                     }));
@@ -1155,6 +1203,7 @@ impl BuildDiscovery for FilesystemCliDescriptorDiscovery {
                     .unwrap_or_else(|| serde_json::json!({
                         "type":"object","properties":{},"additionalProperties":true
                     }));
+                let output_contract = command.get("output_schema").cloned();
                 let risk = match command.get("risk").and_then(Value::as_str).unwrap_or("Medium") {
                     "Low" => RiskClass::Low,
                     "Medium" => RiskClass::Medium,
@@ -1178,6 +1227,7 @@ impl BuildDiscovery for FilesystemCliDescriptorDiscovery {
                     risk,
                     requires_approval,
                     input_contract: Some(input_contract),
+                    output_contract,
                     tags,
                 });
             }
@@ -1398,6 +1448,7 @@ mod tests {
             risk: RiskClass::Medium,
             requires_approval: false,
             input_contract: None,
+            output_contract: None,
             tags: ["crm".to_string()].into_iter().collect(),
         }).unwrap();
 
@@ -1431,6 +1482,7 @@ mod tests {
             risk: RiskClass::Medium,
             requires_approval: false,
             input_contract: None,
+            output_contract: None,
             tags: ["crm".to_string()].into_iter().collect(),
         }).unwrap();
         assert!(!candidate.manifest.enabled_by_default);
@@ -1450,6 +1502,7 @@ mod tests {
             risk: RiskClass::Low,
             requires_approval: false,
             input_contract: None,
+            output_contract: None,
             tags: BTreeSet::new(),
         });
         assert!(matches!(result, Err(BuilderError::Invalid(_))));
@@ -1471,6 +1524,7 @@ mod tests {
             risk: RiskClass::Low,
             requires_approval: false,
             input_contract: None,
+            output_contract: None,
             tags: BTreeSet::new(),
         }).unwrap();
         let root = std::env::temp_dir().join(format!("autopilot-candidate-test-{}", Uuid::new_v4()));
@@ -1623,6 +1677,7 @@ mod tests {
             risk: RiskClass::Medium,
             requires_approval: false,
             input_contract: None,
+            output_contract: None,
             tags: ["crm".to_string()].into_iter().collect(),
         };
         let runtime = Arc::new(FakeRuntime::new(CommandResult {
@@ -1666,6 +1721,7 @@ mod tests {
             risk: RiskClass::High,
             requires_approval: true,
             input_contract: None,
+            output_contract: None,
             tags: ["crm".to_string()].into_iter().collect(),
         };
         let runtime = Arc::new(FakeRuntime::new(CommandResult {
@@ -1706,6 +1762,7 @@ mod tests {
             risk: RiskClass::Low,
             requires_approval: false,
             input_contract: None,
+            output_contract: None,
             tags: BTreeSet::new(),
         }).unwrap();
         let report = qualifier.qualify(&candidate).await;
