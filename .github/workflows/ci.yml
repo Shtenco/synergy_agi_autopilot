@@ -24,6 +24,8 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
         run: cargo test --workspace
+      - name: M10 verified cognitive DAG smoke
+        run: cargo run -p open-autopilot -- cognitive-plan-verify --proposal examples/m10/sales-to-file-cognitive-plan.json
 
   desktop-renderer:
     runs-on: windows-latest
@@ -84,6 +86,8 @@ jobs:
         run: |
           python -m json.tool schemas/synergy.plugin.v1.schema.json > /dev/null
           python -m json.tool schemas/synergy.cli-capabilities.v1.schema.json > /dev/null
+          python -m json.tool schemas/synergy.cognitive-plan.v1.schema.json > /dev/null
+          python -m json.tool examples/m10/sales-to-file-cognitive-plan.json > /dev/null
           for f in plugins/*/plugin.json; do python -m json.tool "$f" > /dev/null; done
       - name: Compile M8 discovery scripts
         run: python -m py_compile scripts/discover-plugin-surfaces.py scripts/propose-plugin-build.py
@@ -127,6 +131,12 @@ jobs:
                 "properties":{"query":{"type":"string"}},
                 "required":["query"],
                 "additionalProperties":false
+              },
+              "output_schema":{
+                "type":"object",
+                "properties":{"items":{"type":"array","items":{"type":"object"}}},
+                "required":["items"],
+                "additionalProperties":false
               }
             }]
           }
@@ -137,6 +147,6 @@ jobs:
             --plugin-id generated.smoke.crm \
             --name "Smoke CRM" \
             --out /tmp/m9-proposals.json
-          python -c "import json; d=json.load(open('/tmp/m9-proposals.json')); p=[x for x in d['proposals'] if x.get('ready_to_build')][0]; assert p['build_request']['input_contract']['required']==['query']"
+          python -c "import json; d=json.load(open('/tmp/m9-proposals.json')); p=[x for x in d['proposals'] if x.get('ready_to_build')][0]; assert p['build_request']['input_contract']['required']==['query']; assert p['build_request']['output_contract']['required']==['items']"
       - name: Compile Python sidecars
         run: python -m compileall -q sidecars/business-runtime/src sidecars/nexus-bridge/src sidecars/connector-gateway/src
