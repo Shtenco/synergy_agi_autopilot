@@ -6,16 +6,154 @@
   "kind": "business",
   "provider": "Shtenco/synergy_ai_company#feat/auto-company-v2",
   "capabilities": [
-    {"name":"company.status","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"company.opportunity.ingest","risk":"Low","requires_approval":false,"mapped_core_capabilities":["NetworkAccess"]},
-    {"name":"company.action.approve","risk":"High","requires_approval":true,"mapped_core_capabilities":[]},
-    {"name":"company.action.dispatch","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess"]},
-    {"name":"company.pause","risk":"High","requires_approval":true,"mapped_core_capabilities":[]}
+    {
+      "name": "company.status",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "company.opportunity.ingest",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "NetworkAccess"
+      ]
+    },
+    {
+      "name": "company.action.approve",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "company.action.dispatch",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": [
+        "NetworkAccess"
+      ]
+    },
+    {
+      "name": "company.pause",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": []
+    }
   ],
   "endpoints": [
-    {"transport":"http","address":"auto-company-v2 FastAPI /v1"}
+    {
+      "transport": "http",
+      "address": "auto-company-v2 FastAPI /v1"
+    }
   ],
-  "tags": ["business","revenue","risk","opportunities","company"],
-  "requires": ["business.capability.runtime"],
-  "enabled_by_default": false
+  "tags": [
+    "business",
+    "revenue",
+    "risk",
+    "opportunities",
+    "company"
+  ],
+  "requires": [
+    "business.capability.runtime"
+  ],
+  "enabled_by_default": false,
+  "input_contracts": {
+    "company.status": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "company.opportunity.ingest": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "expected_revenue_usd": {
+          "type": "number",
+          "default": 0
+        },
+        "estimated_cost_usd": {
+          "type": "number",
+          "default": 0
+        },
+        "probability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0
+        },
+        "hours": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "title",
+        "source",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "company.action.approve": {
+      "type": "object",
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "action_id"
+      ],
+      "additionalProperties": false
+    },
+    "company.action.dispatch": {
+      "type": "object",
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "action_id"
+      ],
+      "additionalProperties": false
+    },
+    "company.pause": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  }
 }
