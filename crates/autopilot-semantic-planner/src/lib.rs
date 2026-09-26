@@ -410,7 +410,12 @@ pub struct WorkflowStep {
 
 impl WorkflowStep {
     pub fn ready(&self) -> bool {
-        self.unresolved_required.is_empty() && self.validation_errors.is_empty()
+        self.validation_errors.is_empty()
+            && (self.unresolved_required.is_empty() || !self.depends_on.is_empty())
+    }
+
+    pub fn requires_runtime_mapping(&self) -> bool {
+        !self.unresolved_required.is_empty() && !self.depends_on.is_empty()
     }
 }
 
