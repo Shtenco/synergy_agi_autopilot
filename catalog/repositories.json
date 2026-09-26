@@ -1234,12 +1234,37 @@
       "default_branch": "main",
       "visibility": "private",
       "archived": false,
-      "tags": [],
-      "capabilities": [],
-      "transports": [],
+      "tags": [
+        "ai",
+        "apps",
+        "blockchain",
+        "business",
+        "compression",
+        "finance",
+        "network",
+        "runtime",
+        "science",
+        "trading"
+      ],
+      "capabilities": [
+        "app.interface",
+        "blockchain.submit",
+        "business.operate",
+        "compression.encode",
+        "computer.execute",
+        "finance.analyze",
+        "intelligence.infer",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1248,12 +1273,21 @@
       "default_branch": "main",
       "visibility": "private",
       "archived": false,
-      "tags": [],
-      "capabilities": [],
+      "tags": [
+        "ai",
+        "apps",
+        "runtime",
+        "science"
+      ],
+      "capabilities": [
+        "app.interface",
+        "trading.execute"
+      ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1263,13 +1297,30 @@
       "visibility": "private",
       "archived": false,
       "tags": [
-        "blockchain"
+        "ai",
+        "apps",
+        "blockchain",
+        "compression",
+        "finance",
+        "science",
+        "trading"
       ],
-      "capabilities": [],
-      "transports": [],
+      "capabilities": [
+        "app.interface",
+        "blockchain.submit",
+        "compression.encode",
+        "finance.analyze",
+        "intelligence.infer",
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1279,13 +1330,24 @@
       "visibility": "private",
       "archived": false,
       "tags": [
-        "finance"
+        "ai",
+        "apps",
+        "finance",
+        "science",
+        "trading"
       ],
-      "capabilities": [],
+      "capabilities": [
+        "app.interface",
+        "blockchain.submit",
+        "finance.analyze",
+        "trading.analyze",
+        "trading.execute"
+      ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1294,16 +1356,13 @@
       "default_branch": "main",
       "visibility": "private",
       "archived": false,
-      "tags": [
-        "apps"
-      ],
-      "capabilities": [
-        "app.interface"
-      ],
+      "tags": [],
+      "capabilities": [],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1313,17 +1372,15 @@
       "visibility": "private",
       "archived": false,
       "tags": [
-        "ai",
         "blockchain",
         "finance"
       ],
-      "capabilities": [
-        "blockchain.submit"
-      ],
+      "capabilities": [],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1333,7 +1390,6 @@
       "visibility": "private",
       "archived": false,
       "tags": [
-        "ai",
         "business"
       ],
       "capabilities": [
@@ -1342,7 +1398,8 @@
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1351,16 +1408,13 @@
       "default_branch": "main",
       "visibility": "private",
       "archived": false,
-      "tags": [
-        "network"
-      ],
-      "capabilities": [
-        "network.transport"
-      ],
+      "tags": [],
+      "capabilities": [],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1375,10 +1429,14 @@
       "capabilities": [
         "network.transport"
       ],
-      "transports": [],
+      "transports": [
+        "http",
+        "shttps"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1396,7 +1454,8 @@
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1406,16 +1465,25 @@
       "visibility": "private",
       "archived": false,
       "tags": [
-        "ai"
+        "ai",
+        "apps",
+        "blockchain",
+        "runtime",
+        "science"
       ],
       "capabilities": [
-        "intelligence.infer",
-        "memory.search"
+        "app.interface",
+        "blockchain.submit",
+        "computer.execute",
+        "intelligence.infer"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1425,13 +1493,27 @@
       "visibility": "private",
       "archived": false,
       "tags": [
-        "network"
+        "ai",
+        "apps",
+        "blockchain",
+        "finance",
+        "network",
+        "runtime"
       ],
-      "capabilities": [],
+      "capabilities": [
+        "app.interface",
+        "blockchain.submit",
+        "computer.execute",
+        "finance.analyze",
+        "intelligence.infer",
+        "network.transport",
+        "trading.execute"
+      ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1443,13 +1525,12 @@
       "tags": [
         "apps"
       ],
-      "capabilities": [
-        "app.interface"
-      ],
+      "capabilities": [],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1460,16 +1541,28 @@
       "archived": false,
       "tags": [
         "ai",
+        "apps",
+        "blockchain",
+        "finance",
+        "runtime",
+        "science",
         "trading"
       ],
       "capabilities": [
+        "app.interface",
+        "blockchain.submit",
+        "computer.execute",
+        "finance.analyze",
         "intelligence.infer",
-        "trading.analyze"
+        "memory.search",
+        "trading.analyze",
+        "trading.execute"
       ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1479,15 +1572,27 @@
       "visibility": "private",
       "archived": false,
       "tags": [
+        "apps",
+        "business",
+        "finance",
+        "runtime",
+        "science",
         "trading"
       ],
       "capabilities": [
+        "app.interface",
+        "finance.analyze",
         "trading.analyze"
       ],
-      "transports": [],
+      "transports": [
+        "cli",
+        "http",
+        "openapi"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1715,5 +1820,5 @@
       ]
     }
   ],
-  "readme_enriched_count": 42
+  "readme_enriched_count": 57
 }
