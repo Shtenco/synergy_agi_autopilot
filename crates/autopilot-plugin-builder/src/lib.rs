@@ -1395,6 +1395,52 @@ mod tests {
     }
 
     #[test]
+    fn openapi_response_schema_becomes_output_contract() {
+        let candidate = PluginBuilder::build(BuildRequest {
+            plugin_id:"generated.openapi.output".into(),
+            display_name:"OpenAPI Output".into(),
+            capability:"crm.read".into(),
+            source:AdapterSource::OpenApi {
+                base_url:"https://api.example.com".into(),
+                operation_id:"getLead".into(),
+                document:serde_json::json!({
+                    "openapi":"3.0.0",
+                    "paths":{
+                        "/lead":{
+                            "get":{
+                                "operationId":"getLead",
+                                "responses":{
+                                    "200":{
+                                        "content":{
+                                            "application/json":{
+                                                "schema":{
+                                                    "type":"object",
+                                                    "properties":{
+                                                        "email":{"type":"string","format":"email"}
+                                                    },
+                                                    "required":["email"]
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+            },
+            risk:RiskClass::Medium,
+            requires_approval:false,
+            input_contract:None,
+            output_contract:None,
+            tags:BTreeSet::new(),
+        }).unwrap();
+        let contract=candidate.manifest.output_contract("crm.read").unwrap();
+        assert_eq!(contract["required"][0].as_str(),Some("email"));
+        assert_eq!(contract["properties"]["email"]["format"].as_str(),Some("email"));
+    }
+
+    #[test]
     fn openapi_contract_keeps_path_and_required_body() {
         let source = AdapterSource::OpenApi {
             base_url: "https://api.example.com".into(),
@@ -1615,6 +1661,56 @@ mod tests {
         ));
         assert_eq!(requests[0].risk, RiskClass::Medium);
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn filesystem_mcp_discovery_persists_output_schema() {
+        let root = std::env::temp_dir().join(format!("autopilot-mcp-output-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("mcp.json"),
+            serde_json::json!({
+                "mcpServers":{
+                    "crm":{"command":"crm-mcp","args":[]}
+                }
+            }).to_string(),
+        ).unwrap();
+        let stdout = concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[{",
+            "\"name\":\"crm_read\",",
+            "\"description\":\"Read CRM leads\",",
+            "\"inputSchema\":{\"type\":\"object\",\"properties\":{}},",
+            "\"outputSchema\":{\"type\":\"object\",\"properties\":{\"email\":{\"type\":\"string\",\"format\":\"email\"}},\"required\":[\"email\"]}",
+            "}]}}\n"
+        );
+        let runtime=Arc::new(FakeRuntime::new(CommandResult {
+            exit_code:0,stdout:stdout.into(),stderr:String::new(),duration_ms:1,
+        }));
+        let discovery=FilesystemMcpDiscovery::new(
+            &root,
+            runtime,
+            ["crm-mcp".to_string()].into_iter().collect(),
+        );
+        let plan=SelfBuildPlan {
+            gap:SemanticGap {
+                goal:"прочитай CRM".into(),
+                suggested_capability:"crm.read".into(),
+                terms:["crm".to_string(),"read".to_string()].into_iter().collect(),
+                reason:"test".into(),
+            },
+            repository_candidates:Vec::new(),
+            strategies:vec![DiscoveryStrategy::McpConfiguration],
+            qualification_gates:Vec::new(),
+            auto_execution_allowed:false,
+        };
+        let requests=discovery.discover(&plan).await.unwrap();
+        assert_eq!(requests.len(),1);
+        let output=requests[0].output_contract.as_ref().unwrap();
+        assert_eq!(output["required"][0].as_str(),Some("email"));
+        let candidate=PluginBuilder::build(requests[0].clone()).unwrap();
+        assert!(candidate.manifest.output_contract("crm.read").is_some());
+        let _=fs::remove_dir_all(root);
     }
 
     #[tokio::test]
