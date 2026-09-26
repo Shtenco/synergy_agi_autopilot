@@ -117,6 +117,18 @@ impl PluginExecutor {
                         format!("approval {} is not approved", approval_id)
                     ));
                 }
+                let approved_plugin = request.action.get("plugin_id").and_then(Value::as_str);
+                let approved_capability = request.action.get("capability").and_then(Value::as_str);
+                if approved_plugin != Some(call.plugin_id.as_str())
+                    || approved_capability != Some(call.capability.as_str())
+                {
+                    return Err(PluginRuntimeError::PersistentApproval(
+                        format!(
+                            "approval {} is bound to {:?}/{:?}, not {}/{}",
+                            approval_id, approved_plugin, approved_capability, call.plugin_id, call.capability
+                        )
+                    ));
+                }
             }
         }
         for mapped in &capability.mapped_core_capabilities {
