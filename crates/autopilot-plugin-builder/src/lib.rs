@@ -1178,6 +1178,54 @@ mod tests {
     }
 
     #[test]
+    fn infers_action_specific_capabilities() {
+        let email_terms = tokenize("отправь email клиенту");
+        assert_eq!(infer_capability(&email_terms), "email.send");
+        let crm_terms = tokenize("создай запись crm");
+        assert_eq!(infer_capability(&crm_terms), "crm.record.create");
+        let browser_terms = tokenize("открой сайт");
+        assert_eq!(infer_capability(&browser_terms), "browser.navigate");
+    }
+
+    #[test]
+    fn openapi_contract_keeps_path_and_required_body() {
+        let source = AdapterSource::OpenApi {
+            base_url: "https://api.example.com".into(),
+            operation_id: "updateLead".into(),
+            document: serde_json::json!({
+                "openapi":"3.0.0",
+                "paths":{
+                    "/leads/{id}":{
+                        "parameters":[
+                            {"name":"id","in":"path","required":true,"schema":{"type":"string"}}
+                        ],
+                        "post":{
+                            "operationId":"updateLead",
+                            "requestBody":{
+                                "required":true,
+                                "content":{
+                                    "application/json":{
+                                        "schema":{
+                                            "type":"object",
+                                            "properties":{"name":{"type":"string"}},
+                                            "required":["name"]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }),
+        };
+        let contract = derive_input_contract(&source);
+        assert_eq!(contract["properties"]["id"]["x-location"], "path");
+        assert!(contract["required"].as_array().unwrap().iter().any(|v| v == "id"));
+        assert!(contract["required"].as_array().unwrap().iter().any(|v| v == "body"));
+        assert_eq!(contract["properties"]["body"]["required"][0], "name");
+    }
+
+    #[test]
     fn typed_gap_ignores_untyped_provider() {
         let candidate = PluginBuilder::build(BuildRequest {
             plugin_id: "generated.crm.read".into(),
