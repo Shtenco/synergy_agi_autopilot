@@ -908,6 +908,86 @@ mod tests {
         assert_eq!(value, serde_json::json!({"ok":true}));
     }
 
+    fn generated_cli_registry() -> PluginRegistry {
+        let raw = r#"{
+          "schema":"synergy.plugin.v1",
+          "id":"generated.test",
+          "name":"Generated Test",
+          "version":"0.1.0",
+          "kind":"cli",
+          "provider":"generated.cli",
+          "capabilities":[{
+            "name":"test.read",
+            "risk":"Low",
+            "requires_approval":false,
+            "mapped_core_capabilities":[]
+          }],
+          "endpoints":[{"transport":"cli","address":"safe-tool"}],
+          "tags":[],
+          "requires":[],
+          "enabled_by_default":false,
+          "adapter":{"type":"cli","program":"safe-tool","args":[]},
+          "input_contracts":{
+            "test.read":{"type":"object","properties":{},"additionalProperties":false}
+          },
+          "output_contracts":{
+            "test.read":{
+              "type":"object",
+              "properties":{"ok":{"type":"boolean","const":true}},
+              "required":["ok"],
+              "additionalProperties":false
+            }
+          }
+        }"#;
+        let mut registry=PluginRegistry::default();
+        registry.register(parse_manifest_json(raw).unwrap()).unwrap();
+        registry
+    }
+
+    #[tokio::test]
+    async fn generated_output_contract_fails_closed() {
+        let runtime=Arc::new(FakeRuntime::new(CommandResult {
+            exit_code:0,
+            stdout:"{\"ok\":false}".into(),
+            stderr:String::new(),
+            duration_ms:1,
+        }));
+        let mut config=PluginRuntimeConfig::default();
+        config.generated_program_allowlist.insert("safe-tool".into());
+        let executor=PluginExecutor::new(
+            generated_cli_registry(),PolicyEngine::default(),runtime,config
+        );
+        let result=executor.execute(PluginCall {
+            plugin_id:"generated.test".into(),
+            capability:"test.read".into(),
+            input:serde_json::json!({}),
+            approved:false,
+        }).await;
+        assert!(matches!(result,Err(PluginRuntimeError::InvalidOutput(_))));
+    }
+
+    #[tokio::test]
+    async fn generated_output_contract_accepts_valid_result() {
+        let runtime=Arc::new(FakeRuntime::new(CommandResult {
+            exit_code:0,
+            stdout:"{\"ok\":true}".into(),
+            stderr:String::new(),
+            duration_ms:1,
+        }));
+        let mut config=PluginRuntimeConfig::default();
+        config.generated_program_allowlist.insert("safe-tool".into());
+        let executor=PluginExecutor::new(
+            generated_cli_registry(),PolicyEngine::default(),runtime,config
+        );
+        let result=executor.execute(PluginCall {
+            plugin_id:"generated.test".into(),
+            capability:"test.read".into(),
+            input:serde_json::json!({}),
+            approved:false,
+        }).await.unwrap();
+        assert_eq!(result.output["ok"],true);
+    }
+
     #[tokio::test]
     async fn high_risk_plugin_call_requires_approval() {
         let runtime = Arc::new(FakeRuntime::new(CommandResult {
