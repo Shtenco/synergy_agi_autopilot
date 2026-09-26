@@ -94,6 +94,8 @@ pub struct PluginManifest {
     pub enabled_by_default: bool,
     #[serde(default)]
     pub adapter: Option<PluginAdapter>,
+    #[serde(default)]
+    pub input_contracts: BTreeMap<String, serde_json::Value>,
 }
 
 impl PluginManifest {
@@ -169,6 +171,19 @@ impl PluginManifest {
             }
         }
 
+        for (capability, schema) in &self.input_contracts {
+            if self.capability(capability).is_none() {
+                return Err(PluginError::InvalidManifest(format!(
+                    "input contract references undeclared capability: {capability}"
+                )));
+            }
+            if !schema.is_object() {
+                return Err(PluginError::InvalidManifest(format!(
+                    "input contract must be a JSON object schema: {capability}"
+                )));
+            }
+        }
+
         let mut seen = BTreeSet::new();
         for capability in &self.capabilities {
             if capability.name.trim().is_empty() {
@@ -183,6 +198,10 @@ impl PluginManifest {
 
     pub fn capability(&self, name: &str) -> Option<&PluginCapability> {
         self.capabilities.iter().find(|c| c.name == name)
+    }
+
+    pub fn input_contract(&self, capability: &str) -> Option<&serde_json::Value> {
+        self.input_contracts.get(capability)
     }
 }
 
@@ -306,6 +325,7 @@ mod tests {
             requires: BTreeSet::new(),
             enabled_by_default: false,
             adapter: None,
+            input_contracts: BTreeMap::new(),
         }
     }
 
