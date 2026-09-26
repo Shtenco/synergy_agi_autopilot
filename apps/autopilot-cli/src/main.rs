@@ -7,6 +7,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
 use autopilot_audit::{AuditStore, InMemoryAuditStore};
+use autopilot_capability_graph::{CapabilityQuery, RepositoryCatalog};
 use autopilot_core::{AgentExecutor, AgentOutcome, Director, DirectorConfig, GoalRequest, PlannedTask, Planner, VerificationOutcome, Verifier};
 use autopilot_delivery::{CiReport, CiState, DeliveryConfig, DeliveryEngine};
 use autopilot_domain::{AgentRole, Capability, Evidence, RiskClass};
@@ -27,6 +28,12 @@ enum Commands {
     Demo { #[arg(long)] goal: String },
     Backends,
     Plugins,
+    CapabilitySearch {
+        #[arg(long)] capability: Option<String>,
+        #[arg(long = "keyword")] keywords: Vec<String>,
+        #[arg(long)] transport: Option<String>,
+        #[arg(long, default_value_t = 20)] limit: usize,
+    },
     PluginCall {
         #[arg(long)] plugin: String,
         #[arg(long)] capability: String,
@@ -269,6 +276,15 @@ fn e2e_sales_steps(
     steps
 }
 
+fn initial_capability_graph() -> Result<autopilot_capability_graph::CapabilityGraph, String> {
+    let catalog: RepositoryCatalog = serde_json::from_str(include_str!("../../../catalog/repositories.json"))
+        .map_err(|error| format!("invalid repository capability catalog: {error}"))?;
+    let mut graph = catalog.into_graph().map_err(|error| error.to_string())?;
+    let registry = initial_plugin_registry()?;
+    graph.attach_plugins(&registry);
+    Ok(graph)
+}
+
 fn parse_backend(value: &str) -> Result<BackendKind, String> {
     match value.to_ascii_lowercase().as_str() {
         "opencode" => Ok(BackendKind::OpenCode),
@@ -433,6 +449,29 @@ async fn main() -> Result<(), String> {
                 println!("{}\t{}\t{}\t{:?}", plugin.id, plugin.version, plugin.name, plugin.kind);
                 for capability in &plugin.capabilities {
                     println!("  {}\t{:?}\tapproval={}", capability.name, capability.risk, capability.requires_approval);
+                }
+            }
+        },
+        Commands::CapabilitySearch { capability, keywords, transport, limit } => {
+            let graph = initial_capability_graph()?;
+            let hits = graph.search(&CapabilityQuery {
+                capability,
+                keywords,
+                require_transport: transport,
+                include_archived: false,
+            });
+            if hits.is_empty() {
+                println!("no capability providers matched");
+            } else {
+                for hit in hits.into_iter().take(limit.max(1)) {
+                    println!(
+                        "{}\tscore={}\tcapabilities={}\ttags={}\ttransports={}",
+                        hit.repository,
+                        hit.score,
+                        hit.matched_capabilities.into_iter().collect::<Vec<_>>().join(","),
+                        hit.matched_tags.into_iter().collect::<Vec<_>>().join(","),
+                        hit.transports.into_iter().collect::<Vec<_>>().join(","),
+                    );
                 }
             }
         },
