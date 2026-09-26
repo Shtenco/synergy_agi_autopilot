@@ -1,0 +1,19 @@
+{
+  "schema":"synergy.plugin.v1",
+  "id":"connector.gateway",
+  "name":"SYNERGY Universal Connector Gateway",
+  "version":"1.0.0",
+  "kind":"open_api",
+  "provider":"sidecars/connector-gateway",
+  "capabilities":[
+    {"name":"http.request","risk":"Medium","requires_approval":false,"mapped_core_capabilities":["NetworkAccess"]},
+    {"name":"openapi.call","risk":"Medium","requires_approval":false,"mapped_core_capabilities":["NetworkAccess"]},
+    {"name":"database.query","risk":"Low","requires_approval":false,"mapped_core_capabilities":["ReadWorkspace"]},
+    {"name":"queue.publish","risk":"Medium","requires_approval":false,"mapped_core_capabilities":[]},
+    {"name":"queue.consume","risk":"Low","requires_approval":false,"mapped_core_capabilities":[]}
+  ],
+  "endpoints":[{"transport":"http-loopback","address":"http://127.0.0.1:8150"}],
+  "tags":["openapi","oauth2","http","database","queue","webhook","connector"],
+  "requires":[],
+  "enabled_by_default":false
+}
