@@ -73,5 +73,11 @@ jobs:
         run: python -m pip install -e ./sidecars/nexus-bridge
       - name: Validate NEXUS bridge import
         run: python -c "from nexus_bridge.app import app; assert app.title.startswith('SYNERGY NEXUS')"
+      - name: Install Connector Gateway
+        run: python -m pip install -e ./sidecars/connector-gateway
+      - name: Validate Connector Gateway import
+        run: python -c "from connector_gateway.app import app; assert app.title.startswith('SYNERGY Connector')"
+      - name: Validate capability catalog
+        run: python -m json.tool catalog/repositories.json > /dev/null
       - name: Compile Python sidecars
-        run: python -m compileall -q sidecars/business-runtime/src sidecars/nexus-bridge/src
+        run: python -m compileall -q sidecars/business-runtime/src sidecars/nexus-bridge/src sidecars/connector-gateway/src
