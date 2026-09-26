@@ -962,6 +962,7 @@ impl<Q: CandidateQualifier, D: BuildDiscovery> SelfBuildCoordinator<Q, D> {
         }
 
         let mut last_rejected = None;
+        let mut awaiting_promotion = None;
         for request in requests {
             let candidate = match PluginBuilder::build(request) {
                 Ok(candidate) => candidate,
@@ -983,7 +984,10 @@ impl<Q: CandidateQualifier, D: BuildDiscovery> SelfBuildCoordinator<Q, D> {
                 && !capability.requires_approval;
 
             if !auto_promotable {
-                return Ok(SelfBuildOutcome::QualifiedAwaitingPromotion { candidate });
+                if awaiting_promotion.is_none() {
+                    awaiting_promotion = Some(candidate);
+                }
+                continue;
             }
 
             let manifest_path = self.store.promote(id, &self.generated_plugins_root)?;
@@ -991,7 +995,9 @@ impl<Q: CandidateQualifier, D: BuildDiscovery> SelfBuildCoordinator<Q, D> {
             return Ok(SelfBuildOutcome::Promoted { candidate, manifest_path });
         }
 
-        if let Some(candidate) = last_rejected {
+        if let Some(candidate) = awaiting_promotion {
+            Ok(SelfBuildOutcome::QualifiedAwaitingPromotion { candidate })
+        } else if let Some(candidate) = last_rejected {
             Ok(SelfBuildOutcome::CandidateRejected { candidate })
         } else {
             Ok(SelfBuildOutcome::DiscoveryEmpty { plan })
