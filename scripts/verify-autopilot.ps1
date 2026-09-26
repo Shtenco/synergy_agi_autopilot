@@ -81,6 +81,12 @@ try {
       "properties":{"query":{"type":"string"}},
       "required":["query"],
       "additionalProperties":false
+    },
+    "output_schema":{
+      "type":"object",
+      "properties":{"items":{"type":"array","items":{"type":"object"}}},
+      "required":["items"],
+      "additionalProperties":false
     }
   }]
 }
@@ -90,7 +96,7 @@ try {
     $proposalsCli = Join-Path $tmpCli "proposals.json"
     python scripts/discover-plugin-surfaces.py $tmpCli --out $discoveryCli
     python scripts/propose-plugin-build.py $discoveryCli --capability crm.read --plugin-id generated.smoke.crm --name "Smoke CRM" --out $proposalsCli
-    python -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); p=[x for x in d['proposals'] if x.get('ready_to_build')][0]; assert p['build_request']['input_contract']['required']==['query']" $proposalsCli
+    python -c "import json,sys; d=json.load(open(sys.argv[1],encoding='utf-8')); p=[x for x in d['proposals'] if x.get('ready_to_build')][0]; assert p['build_request']['input_contract']['required']==['query']; assert p['build_request']['output_contract']['required']==['items']" $proposalsCli
 }
 finally {
     Remove-Item -Recurse -Force $tmpCli -ErrorAction SilentlyContinue
