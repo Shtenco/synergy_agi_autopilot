@@ -609,6 +609,51 @@ mod tests {
         assert!(candidate.manifest.requires.contains("connector.gateway"));
     }
 
+    #[test]
+    fn shell_metacharacters_are_rejected() {
+        let result = PluginBuilder::build(BuildRequest {
+            plugin_id: "generated.bad.cli".into(),
+            display_name: "Bad CLI".into(),
+            capability: "custom.bad.read".into(),
+            source: AdapterSource::Cli {
+                program: "tool;rm".into(),
+                args: vec![],
+            },
+            risk: RiskClass::Low,
+            requires_approval: false,
+            tags: BTreeSet::new(),
+        });
+        assert!(matches!(result, Err(BuilderError::Invalid(_))));
+    }
+
+    #[test]
+    fn quarantined_candidate_cannot_be_promoted() {
+        let candidate = PluginBuilder::build(BuildRequest {
+            plugin_id: "generated.safe.openapi".into(),
+            display_name: "Safe OpenAPI".into(),
+            capability: "custom.safe.read".into(),
+            source: AdapterSource::OpenApi {
+                base_url: "https://api.example.com".into(),
+                operation_id: "status".into(),
+                document: serde_json::json!({
+                    "paths": {"/status": {"get": {"operationId": "status"}}}
+                }),
+            },
+            risk: RiskClass::Low,
+            requires_approval: false,
+            tags: BTreeSet::new(),
+        }).unwrap();
+        let root = std::env::temp_dir().join(format!("autopilot-candidate-test-{}", Uuid::new_v4()));
+        let generated = root.join("generated");
+        let store = CandidateStore::new(root.join("quarantine"));
+        store.save(&candidate).unwrap();
+        assert!(matches!(
+            store.promote(candidate.candidate_id, &generated),
+            Err(BuilderError::NotQualified)
+        ));
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[tokio::test]
     async fn unallowlisted_cli_candidate_is_rejected_by_sandbox() {
         let runtime = Arc::new(FakeRuntime::new(CommandResult {
