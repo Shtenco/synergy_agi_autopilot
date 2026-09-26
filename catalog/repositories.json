@@ -10,12 +10,20 @@
       "default_branch": "main",
       "visibility": "public",
       "archived": false,
-      "tags": [],
+      "tags": [
+        "ai",
+        "blockchain",
+        "finance",
+        "trading"
+      ],
       "capabilities": [],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "page:index.html"
       ]
     },
     {
@@ -378,13 +386,18 @@
       "visibility": "public",
       "archived": false,
       "tags": [
-        "ai"
+        "ai",
+        "finance",
+        "trading"
       ],
       "capabilities": [],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "page:index.html"
       ]
     },
     {
@@ -455,7 +468,8 @@
       "visibility": "private",
       "archived": false,
       "tags": [
-        "apps"
+        "apps",
+        "finance"
       ],
       "capabilities": [
         "app.interface"
@@ -463,7 +477,9 @@
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "doc:docs/LEGACY_DISTILLATION_V3_IMPORT_QUEUE.md",
+        "tree:mobile/"
       ]
     },
     {
@@ -1964,5 +1980,7 @@
       ]
     }
   ],
-  "readme_enriched_count": 70
+  "readme_enriched_count": 70,
+  "evidence_enriched_count": 73,
+  "alternate_evidence_count": 3
 }
