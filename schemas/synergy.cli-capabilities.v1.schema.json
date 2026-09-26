@@ -60,6 +60,9 @@
               "type": "string"
             },
             "uniqueItems": true
+          },
+          "output_schema": {
+            "type": "object"
           }
         }
       }
