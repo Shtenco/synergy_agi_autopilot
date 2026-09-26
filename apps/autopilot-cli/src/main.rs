@@ -303,7 +303,14 @@ fn workflow_to_plugin_steps(
     require_persisted_approval: bool,
 ) -> Result<Vec<PluginGoalStep>, String> {
     let mut steps = Vec::new();
-    for step in &plan.steps {
+    let ordered_ids = if plan.execution_layers.is_empty() {
+        plan.steps.iter().map(|step| step.id.clone()).collect::<Vec<_>>()
+    } else {
+        plan.execution_layers.iter().flatten().cloned().collect::<Vec<_>>()
+    };
+    for step_id in ordered_ids {
+        let step = plan.steps.iter().find(|step| step.id == step_id)
+            .ok_or_else(|| format!("execution layer references unknown step: {step_id}"))?;
         if step.requires_approval && !approved_steps.contains(&step.id) {
             return Err(format!(
                 "workflow step {} requires approval; add --approve-step {}",
