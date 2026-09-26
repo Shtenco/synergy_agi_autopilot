@@ -279,12 +279,7 @@ impl GraphGoalEngine {
         let verifier = Arc::new(PluginEvidenceVerifier);
         let director = Director::new(
             DirectorConfig { max_repairs: 0 },
-            PolicyEngine::new(vec![
-                autopilot_policy::PolicyRule::for_risk_at_least(
-                    RiskClass::Low,
-                    PolicyDecision::Allow,
-                )
-            ]),
+            PolicyEngine::default(),
             audit,
             planner,
             bridge,
