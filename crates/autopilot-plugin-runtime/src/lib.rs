@@ -518,12 +518,16 @@ impl PluginExecutor {
         };
         match adapter {
             PluginAdapter::OpenApi { base_url, operation_id, document } => {
+                let contract = manifest.input_contract(&call.capability);
+                let buckets = split_openapi_arguments(contract, &call.input);
                 let mut payload = json!({
                     "base_url": base_url,
                     "operation_id": operation_id,
                     "document": document,
-                    "path_params": call.input.get("path_params").cloned().unwrap_or_else(|| json!({})),
-                    "body": call.input.get("body").cloned().unwrap_or(Value::Null),
+                    "path_params": buckets.path,
+                    "query_params": buckets.query,
+                    "header_params": buckets.header,
+                    "body": buckets.body,
                 });
                 if let Some(oauth2) = call.input.get("oauth2") {
                     payload["oauth2"] = oauth2.clone();
@@ -701,6 +705,57 @@ impl PluginExecutor {
         Ok(result)
     }
 }
+
+struct OpenApiArgumentBuckets {
+    path: Value,
+    query: Value,
+    header: Value,
+    body: Value,
+}
+
+fn split_openapi_arguments(contract: Option<&Value>, input: &Value) -> OpenApiArgumentBuckets {
+    let mut path = serde_json::Map::new();
+    let mut query = serde_json::Map::new();
+    let mut header = serde_json::Map::new();
+    let mut body = input.get("body").cloned().unwrap_or(Value::Null);
+
+    let properties = contract
+        .and_then(|schema| schema.get("properties"))
+        .and_then(Value::as_object);
+    if let (Some(properties), Some(arguments)) = (properties, input.as_object()) {
+        for (name, value) in arguments {
+            if name.starts_with('_') || name == "body" || name == "oauth2" { continue; }
+            let location = properties.get(name)
+                .and_then(|schema| schema.get("x-location"))
+                .and_then(Value::as_str)
+                .unwrap_or("query");
+            match location {
+                "path" => { path.insert(name.clone(), value.clone()); }
+                "header" => { header.insert(name.clone(), value.clone()); }
+                "query" | "cookie" => { query.insert(name.clone(), value.clone()); }
+                _ => { query.insert(name.clone(), value.clone()); }
+            }
+        }
+    }
+    if body.is_null() {
+        if let Some(arguments) = input.as_object() {
+            let non_meta = arguments.iter()
+                .filter(|(key, _)| !key.starts_with('_') && *key != "oauth2")
+                .map(|(key,value)|(key.clone(),value.clone()))
+                .collect::<serde_json::Map<_,_>>();
+            if properties.is_none() && !non_meta.is_empty() {
+                body = Value::Object(non_meta);
+            }
+        }
+    }
+    OpenApiArgumentBuckets {
+        path: Value::Object(path),
+        query: Value::Object(query),
+        header: Value::Object(header),
+        body,
+    }
+}
+
 
 fn sanitize_contract_input(value: &Value) -> Value {
     match value {
