@@ -92,12 +92,14 @@ enum Commands {
         #[arg(long, default_value = "{}")] input_json: String,
         #[arg(long, default_value_t = false)] approve: bool,
         #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long)] control_db: Option<PathBuf>,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
     },
     PluginGoal {
         #[arg(long)] goal: String,
         #[arg(long)] plan: PathBuf,
         #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long)] control_db: Option<PathBuf>,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
     },
     E2eSales {
@@ -106,6 +108,7 @@ enum Commands {
         #[arg(long)] product: String,
         #[arg(long, default_value = "business owners")] audience: String,
         #[arg(long)] workspace: PathBuf,
+        #[arg(long)] control_db: Option<PathBuf>,
         #[arg(long, default_value_t = false)] use_remote: bool,
         #[arg(long = "allow-env")] allow_env: Vec<String>,
     },
@@ -639,11 +642,12 @@ async fn main() -> Result<(), String> {
                 .map_err(|error| error.to_string())?;
             println!("budget_reserved={}\tamount_microusd={}\tremaining_microusd={}", id, amount_microusd.max(0), remaining);
         },
-        Commands::PluginCall { plugin, capability, input_json, approve, workspace, allow_env } => {
+        Commands::PluginCall { plugin, capability, input_json, approve, workspace, control_db, allow_env } => {
             let registry = initial_plugin_registry()?;
             let input = serde_json::from_str(&input_json).map_err(|error| format!("invalid --input-json: {error}"))?;
             let mut config = PluginRuntimeConfig::default();
             config.local_workspace = workspace;
+            config.control_plane_db = control_db;
             config.timeout_ms = Some(120_000);
             if !allow_env.is_empty() { config.env_allowlist.insert(plugin.clone(), allow_env); }
             let executor = PluginExecutor::new(
@@ -660,7 +664,7 @@ async fn main() -> Result<(), String> {
             }).await.map_err(|error| error.to_string())?;
             println!("{}", serde_json::to_string_pretty(&result).map_err(|error| error.to_string())?);
         },
-        Commands::PluginGoal { goal, plan, workspace, allow_env } => {
+        Commands::PluginGoal { goal, plan, workspace, control_db, allow_env } => {
             let registry = initial_plugin_registry()?;
             let raw = fs::read_to_string(&plan).map_err(|error| format!("cannot read plan {}: {error}", plan.display()))?;
             let steps: Vec<PluginGoalStep> = serde_json::from_str(&raw)
@@ -669,6 +673,7 @@ async fn main() -> Result<(), String> {
 
             let mut config = PluginRuntimeConfig::default();
             config.local_workspace = workspace;
+            config.control_plane_db = control_db;
             config.timeout_ms = Some(120_000);
             config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
             config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
@@ -698,11 +703,12 @@ async fn main() -> Result<(), String> {
                 summary.blocked_by_policy
             );
         },
-        Commands::E2eSales { lead_url, lead_title, product, audience, workspace, use_remote, allow_env } => {
+        Commands::E2eSales { lead_url, lead_title, product, audience, workspace, control_db, use_remote, allow_env } => {
             let registry = initial_plugin_registry()?;
             let steps = e2e_sales_steps(&lead_url, &lead_title, &product, &audience, use_remote);
             let mut config = PluginRuntimeConfig::default();
             config.local_workspace = Some(workspace);
+            config.control_plane_db = control_db;
             config.timeout_ms = Some(120_000);
             config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
             config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
