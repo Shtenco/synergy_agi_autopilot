@@ -23,6 +23,7 @@ use autopilot_plugin_builder::{BuildDiscoveryChain, BuildRequest, CandidateStore
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
+use autopilot_semantic_planner::{AdaptiveWorkflowSynthesizer, MappingContext, SemanticArgumentMapper, WorkflowPlan};
 use uuid::Uuid;
 
 #[derive(Parser)]
@@ -46,6 +47,32 @@ enum Commands {
     },
     SemanticGap {
         #[arg(long)] goal: String,
+    },
+    ArgumentMap {
+        #[arg(long)] plugin: String,
+        #[arg(long)] capability: String,
+        #[arg(long)] goal: String,
+        #[arg(long, default_value = "{}")] hints_json: String,
+        #[arg(long, default_value = "null")] memory_json: String,
+    },
+    WorkflowPlan {
+        #[arg(long)] goal: String,
+        #[arg(long, default_value = "{}")] hints_json: String,
+        #[arg(long, default_value = "null")] memory_json: String,
+    },
+    WorkflowRun {
+        #[arg(long)] goal: String,
+        #[arg(long, default_value = "{}")] hints_json: String,
+        #[arg(long, default_value = "null")] memory_json: String,
+        #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long)] control_db: Option<PathBuf>,
+        #[arg(long = "approve-step")] approve_step: Vec<String>,
+        #[arg(long = "approval-id")] approval_id: Vec<String>,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
+        #[arg(long = "allow-generated-program")] allow_generated_program: Vec<String>,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long)] wsl_distro: Option<String>,
     },
     PluginBuild {
         #[arg(long)] request: PathBuf,
@@ -229,6 +256,73 @@ fn initial_plugin_registry() -> Result<PluginRegistry, String> {
     }
     registry.validate_dependencies().map_err(|error| error.to_string())?;
     Ok(registry)
+}
+
+fn semantic_context_from_json(
+    goal: &str,
+    hints_json: &str,
+    memory_json: &str,
+) -> Result<MappingContext, String> {
+    let hints_value: serde_json::Value = serde_json::from_str(hints_json)
+        .map_err(|error| format!("invalid --hints-json: {error}"))?;
+    let hints = hints_value.as_object()
+        .ok_or_else(|| "--hints-json must be a JSON object".to_string())?
+        .iter().map(|(key,value)|(key.clone(),value.clone())).collect();
+    let memory = serde_json::from_str(memory_json)
+        .map_err(|error| format!("invalid --memory-json: {error}"))?;
+    Ok(MappingContext {
+        goal: goal.to_string(),
+        hints,
+        memory,
+        prior_outputs: Vec::new(),
+    })
+}
+
+fn parse_step_value_map(values: &[String], flag: &str) -> Result<BTreeMap<String,String>, String> {
+    let mut out = BTreeMap::new();
+    for value in values {
+        let (step, item) = value.split_once('=')
+            .ok_or_else(|| format!("{flag} must use step-id=value syntax: {value}"))?;
+        if step.trim().is_empty() || item.trim().is_empty() {
+            return Err(format!("{flag} contains an empty step or value: {value}"));
+        }
+        out.insert(step.to_string(), item.to_string());
+    }
+    Ok(out)
+}
+
+fn workflow_to_plugin_steps(
+    plan: &WorkflowPlan,
+    approved_steps: &BTreeSet<String>,
+    approval_ids: &BTreeMap<String,String>,
+) -> Result<Vec<PluginGoalStep>, String> {
+    let mut steps = Vec::new();
+    for step in &plan.steps {
+        if step.requires_approval && !approved_steps.contains(&step.id) {
+            return Err(format!(
+                "workflow step {} requires approval; add --approve-step {}",
+                step.id, step.id
+            ));
+        }
+        let mut input = serde_json::json!({
+            "$semantic_contract": step.input_contract,
+            "$semantic_goal": step.objective,
+            "$semantic_hints": step.mapped_arguments,
+        });
+        if let Some(approval_id) = approval_ids.get(&step.id) {
+            input["_approval_id"] = serde_json::Value::String(approval_id.clone());
+        }
+        steps.push(PluginGoalStep {
+            id: Some(step.id.clone()),
+            role: AgentRole::Custom("SemanticWorkflow".into()),
+            plugin_id: step.plugin_id.clone(),
+            capability: step.capability.clone(),
+            input,
+            approved: approved_steps.contains(&step.id),
+            risk: step.risk,
+        });
+    }
+    Ok(steps)
 }
 
 fn e2e_sales_steps(
@@ -614,6 +708,91 @@ async fn main() -> Result<(), String> {
                     );
                 }
             }
+        },
+        Commands::ArgumentMap { plugin, capability, goal, hints_json, memory_json } => {
+            let registry = initial_plugin_registry()?;
+            let manifest = registry.get(&plugin)
+                .ok_or_else(|| format!("unknown plugin: {plugin}"))?;
+            let contract = manifest.input_contract(&capability)
+                .ok_or_else(|| format!("plugin {plugin} exposes no input contract for {capability}"))?;
+            let context = semantic_context_from_json(&goal, &hints_json, &memory_json)?;
+            let result = SemanticArgumentMapper::map(contract, &context)
+                .map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&result).map_err(|error| error.to_string())?);
+            if !result.valid() {
+                return Err("semantic argument dry-run is not valid".into());
+            }
+        },
+        Commands::WorkflowPlan { goal, hints_json, memory_json } => {
+            let registry = initial_plugin_registry()?;
+            let mut graph = initial_capability_graph()?;
+            graph.attach_plugins(&registry);
+            let context = semantic_context_from_json(&goal, &hints_json, &memory_json)?;
+            let plan = AdaptiveWorkflowSynthesizer::synthesize(&goal, &graph, &registry, &context)
+                .map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?);
+            if !plan.ready {
+                return Err("workflow dry-run is not ready; inspect unresolved_required/validation_errors".into());
+            }
+        },
+        Commands::WorkflowRun {
+            goal, hints_json, memory_json, workspace, control_db,
+            approve_step, approval_id, allow_env, allow_generated_program,
+            runtime, docker_image, wsl_distro
+        } => {
+            let registry = initial_plugin_registry()?;
+            let mut graph = initial_capability_graph()?;
+            graph.attach_plugins(&registry);
+            let context = semantic_context_from_json(&goal, &hints_json, &memory_json)?;
+            let plan = AdaptiveWorkflowSynthesizer::synthesize(&goal, &graph, &registry, &context)
+                .map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?);
+            if !plan.ready {
+                return Err("workflow dry-run is not ready; execution refused".into());
+            }
+
+            let approved_steps = approve_step.into_iter().collect::<BTreeSet<_>>();
+            let approval_ids = parse_step_value_map(&approval_id, "--approval-id")?;
+            let steps = workflow_to_plugin_steps(&plan, &approved_steps, &approval_ids)?;
+
+            let execution_runtime = build_plugin_runtime(
+                &runtime,
+                workspace.as_deref(),
+                docker_image.as_deref(),
+                wsl_distro.as_deref(),
+            )?;
+            let mut config = PluginRuntimeConfig::default();
+            config.local_workspace = workspace;
+            config.control_plane_db = control_db;
+            config.generated_program_allowlist = allow_generated_program.into_iter().collect();
+            config.timeout_ms = Some(120_000);
+            config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
+            config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
+            config.bearer_token_env.insert("business.auto-company".into(), "SYNERGY_API_TOKEN".into());
+            config.bearer_token_env.insert("connector.gateway".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.email".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.calendar".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.crm".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            for plugin_id in registry.list().map(|manifest| manifest.id.clone()).collect::<Vec<_>>() {
+                if !allow_env.is_empty() { config.env_allowlist.insert(plugin_id, allow_env.clone()); }
+            }
+
+            let executor = Arc::new(PluginExecutor::new(
+                registry,
+                PolicyEngine::default(),
+                execution_runtime,
+                config,
+            ));
+            let audit = Arc::new(InMemoryAuditStore::default());
+            let engine = PluginGoalEngine::new(audit.clone(), executor, steps, 0);
+            let summary = engine.run(goal).await.map_err(|error| error.to_string())?;
+            println!(
+                "M9_WORKFLOW\nfinal_state={:?}\nevidence={}\naudit_events={}\nblocked_by_policy={}",
+                summary.final_state,
+                summary.evidence.len(),
+                audit.list_by_correlation(summary.correlation_id).await?.len(),
+                summary.blocked_by_policy,
+            );
         },
         Commands::SemanticGap { goal } => {
             let graph = initial_capability_graph()?;
