@@ -759,7 +759,8 @@ impl VerifiedDagOptimizer {
                     .unwrap_or(Value::Null);
                 let mut candidates = Vec::<TypedDataflowEdge>::new();
 
-                for producer_index in 0..consumer_index {
+                for producer_index in 0..plan.steps.len() {
+                    if producer_index == consumer_index { continue; }
                     let Some(output_contract) = plan.steps[producer_index].output_contract.as_ref() else { continue };
                     for (path, compatibility, score) in TypedSchemaMatcher::match_field(
                         output_contract,
@@ -772,7 +773,7 @@ impl VerifiedDagOptimizer {
                             to_step: plan.steps[consumer_index].id.clone(),
                             to_field: field.clone(),
                             compatibility,
-                            score: score + (producer_index as u16).min(20),
+                            score,
                         });
                     }
                 }
@@ -1240,6 +1241,58 @@ mod tests {
         };
         assert!(step.ready());
         assert!(step.requires_runtime_mapping());
+    }
+
+    #[test]
+    fn typed_dag_reorders_late_producer() {
+        let consumer = WorkflowStep {
+            id:"send".into(),
+            objective:"send".into(),
+            plugin_id:"email".into(),
+            capability:"email.send".into(),
+            risk:RiskClass::High,
+            input_contract:serde_json::json!({
+                "type":"object",
+                "properties":{"body":{"type":"string"}},
+                "required":["body"]
+            }),
+            output_contract:None,
+            contract_declared:true,
+            mapped_arguments:serde_json::json!({}),
+            unresolved_required:["body".to_string()].into_iter().collect(),
+            validation_errors:Vec::new(),
+            depends_on:Vec::new(),
+            requires_approval:true,
+        };
+        let producer = WorkflowStep {
+            id:"proposal".into(),
+            objective:"prepare".into(),
+            plugin_id:"sales".into(),
+            capability:"sales.proposal".into(),
+            risk:RiskClass::Low,
+            input_contract:serde_json::json!({"type":"object","properties":{}}),
+            output_contract:Some(serde_json::json!({
+                "type":"object",
+                "properties":{"message":{"type":"string"}},
+                "required":["message"]
+            })),
+            contract_declared:true,
+            mapped_arguments:serde_json::json!({}),
+            unresolved_required:BTreeSet::new(),
+            validation_errors:Vec::new(),
+            depends_on:Vec::new(),
+            requires_approval:false,
+        };
+        let plan=VerifiedDagOptimizer::optimize(WorkflowPlan {
+            goal:"send after prepare".into(),
+            steps:vec![consumer,producer],
+            unresolved_objectives:Vec::new(),
+            typed_edges:Vec::new(),
+            execution_layers:Vec::new(),
+            ready:false,
+        }).unwrap();
+        assert!(plan.ready);
+        assert_eq!(plan.execution_layers,vec![vec!["proposal".to_string()],vec!["send".to_string()]]);
     }
 
     #[test]
