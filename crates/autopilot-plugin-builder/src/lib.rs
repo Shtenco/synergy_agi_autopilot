@@ -580,6 +580,130 @@ pub trait BuildDiscovery: Send + Sync {
     async fn discover(&self, plan: &SelfBuildPlan) -> Result<Vec<BuildRequest>, BuilderError>;
 }
 
+#[derive(Clone, Debug)]
+pub struct FilesystemOpenApiDiscovery {
+    root: PathBuf,
+    base_url_override: Option<String>,
+    max_files: usize,
+}
+
+impl FilesystemOpenApiDiscovery {
+    pub fn new(root: impl Into<PathBuf>, base_url_override: Option<String>) -> Self {
+        Self { root: root.into(), base_url_override, max_files: 5000 }
+    }
+
+    pub fn max_files(mut self, value: usize) -> Self {
+        self.max_files = value.max(1);
+        self
+    }
+
+    fn collect_files(&self) -> Vec<PathBuf> {
+        fn walk(root: &Path, out: &mut Vec<PathBuf>, left: &mut usize) {
+            if *left == 0 { return; }
+            let Ok(entries) = fs::read_dir(root) else { return };
+            for entry in entries.flatten() {
+                if *left == 0 { break; }
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name().and_then(|v| v.to_str()).unwrap_or("");
+                    if matches!(name, ".git" | "node_modules" | "target" | ".venv" | "venv" | "dist" | "build") {
+                        continue;
+                    }
+                    walk(&path, out, left);
+                } else if path.is_file() {
+                    *left -= 1;
+                    out.push(path);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        let mut left = self.max_files;
+        walk(&self.root, &mut out, &mut left);
+        out
+    }
+
+    fn operation_score(operation_id: &str, path: &str, capability: &str, method: &str) -> i64 {
+        let desired = capability.to_ascii_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+            .collect::<BTreeSet<_>>();
+        let searchable = format!("{operation_id} {path}").to_ascii_lowercase();
+        let mut score = desired.iter().filter(|term| searchable.contains(term.as_str())).count() as i64 * 20;
+        if method.eq_ignore_ascii_case("get") { score += 20; }
+        if operation_id.to_ascii_lowercase().contains("list") || operation_id.to_ascii_lowercase().contains("get") {
+            score += 5;
+        }
+        score
+    }
+
+    fn requests_from_document(
+        &self,
+        file: &Path,
+        document: Value,
+        capability: &str,
+    ) -> Vec<(i64, BuildRequest)> {
+        let base_url = self.base_url_override.clone().or_else(|| {
+            document.get("servers").and_then(Value::as_array)
+                .and_then(|servers| servers.first())
+                .and_then(Value::as_object)
+                .and_then(|server| server.get("url"))
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        });
+        let Some(base_url) = base_url else { return Vec::new() };
+        let Some(paths) = document.get("paths").and_then(Value::as_object) else { return Vec::new() };
+        let mut out = Vec::new();
+        for (path_name, item) in paths {
+            let Some(methods) = item.as_object() else { continue };
+            for (method, operation) in methods {
+                if !matches!(method.as_str(), "get" | "post" | "put" | "patch" | "delete") { continue; }
+                let Some(operation_id) = operation.get("operationId").and_then(Value::as_str) else { continue };
+                let score = Self::operation_score(operation_id, path_name, capability, method);
+                let risk = if method == "get" { RiskClass::Medium } else { RiskClass::High };
+                let id_suffix = operation_id.to_ascii_lowercase()
+                    .chars()
+                    .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+                    .collect::<String>();
+                let request = BuildRequest {
+                    plugin_id: format!("generated.openapi.{id_suffix}"),
+                    display_name: format!("Generated OpenAPI {operation_id}"),
+                    capability: capability.to_string(),
+                    source: AdapterSource::OpenApi {
+                        base_url: base_url.clone(),
+                        operation_id: operation_id.to_string(),
+                        document: document.clone(),
+                    },
+                    risk,
+                    requires_approval: risk >= RiskClass::High,
+                    tags: ["generated".to_string(), "openapi".to_string(), format!("source:{}", file.display())]
+                        .into_iter().collect(),
+                };
+                out.push((score, request));
+            }
+        }
+        out
+    }
+}
+
+#[async_trait]
+impl BuildDiscovery for FilesystemOpenApiDiscovery {
+    async fn discover(&self, plan: &SelfBuildPlan) -> Result<Vec<BuildRequest>, BuilderError> {
+        let mut ranked = Vec::new();
+        for file in self.collect_files() {
+            let name = file.file_name().and_then(|v| v.to_str()).unwrap_or("").to_ascii_lowercase();
+            if !matches!(name.as_str(), "openapi.json" | "swagger.json" | "api.json") { continue; }
+            let raw = match fs::read_to_string(&file) { Ok(value) => value, Err(_) => continue };
+            if raw.len() > 2_000_000 { continue; }
+            let Ok(document) = serde_json::from_str::<Value>(&raw) else { continue };
+            if document.get("openapi").is_none() && document.get("swagger").is_none() { continue; }
+            ranked.extend(self.requests_from_document(&file, document, &plan.gap.suggested_capability));
+        }
+        ranked.sort_by(|a,b| b.0.cmp(&a.0).then_with(|| a.1.plugin_id.cmp(&b.1.plugin_id)));
+        Ok(ranked.into_iter().map(|(_,request)| request).collect())
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct StaticBuildDiscovery {
     pub requests: Vec<BuildRequest>,
