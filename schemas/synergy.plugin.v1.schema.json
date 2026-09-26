@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.local/schemas/synergy.plugin.v1.schema.json",
+  "title": "SYNERGY Plugin Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema","id","name","version","kind","provider","capabilities","endpoints"],
+  "properties": {
+    "schema": {"const": "synergy.plugin.v1"},
+    "id": {"type":"string","minLength":1},
+    "name": {"type":"string","minLength":1},
+    "version": {"type":"string","minLength":1},
+    "kind": {
+      "oneOf": [
+        {"type":"string","enum":["mcp","remote_mcp","http","open_api","cli","filesystem","browser","desktop","mobile","database","webhook","queue","iot","model","memory","business","worker"]},
+        {"type":"object"}
+      ]
+    },
+    "provider": {"type":"string","minLength":1},
+    "capabilities": {
+      "type":"array",
+      "items": {
+        "type":"object",
+        "additionalProperties": false,
+        "required":["name","risk","requires_approval"],
+        "properties": {
+          "name":{"type":"string","minLength":1},
+          "risk":{"type":"string","enum":["Low","Medium","High","Critical"]},
+          "requires_approval":{"type":"boolean"},
+          "mapped_core_capabilities":{"type":"array","items":{},"uniqueItems":true}
+        }
+      }
+    },
+    "endpoints": {
+      "type":"array",
+      "items": {
+        "type":"object",
+        "additionalProperties": false,
+        "required":["transport","address"],
+        "properties":{
+          "transport":{"type":"string","minLength":1},
+          "address":{"type":"string","minLength":1}
+        }
+      }
+    },
+    "tags":{"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "requires":{"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "enabled_by_default":{"type":"boolean"},
+    "adapter": {
+      "oneOf": [
+        {
+          "type":"object",
+          "additionalProperties":false,
+          "required":["type","base_url","operation_id","document"],
+          "properties":{
+            "type":{"const":"open_api"},
+            "base_url":{"type":"string","minLength":1},
+            "operation_id":{"type":"string","minLength":1},
+            "document":{"type":"object"}
+          }
+        },
+        {
+          "type":"object",
+          "additionalProperties":false,
+          "required":["type","command","tool"],
+          "properties":{
+            "type":{"const":"mcp_stdio"},
+            "command":{"type":"string","minLength":1},
+            "args":{"type":"array","items":{"type":"string"}},
+            "tool":{"type":"string","minLength":1}
+          }
+        },
+        {
+          "type":"object",
+          "additionalProperties":false,
+          "required":["type","program"],
+          "properties":{
+            "type":{"const":"cli"},
+            "program":{"type":"string","minLength":1},
+            "args":{"type":"array","items":{"type":"string"}}
+          }
+        }
+      ]
+    }
+  }
+}
