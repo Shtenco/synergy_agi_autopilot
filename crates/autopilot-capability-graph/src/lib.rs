@@ -58,6 +58,51 @@ pub struct CapabilityGraph {
     pub capabilities: BTreeMap<String, CapabilityNode>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoalRoute {
+    pub capability: String,
+    pub provider: String,
+    pub repository: Option<String>,
+    pub score: i64,
+    pub matched_terms: BTreeSet<String>,
+}
+
+fn goal_terms(goal: &str) -> BTreeSet<String> {
+    let mut terms = goal
+        .to_ascii_lowercase()
+        .split(|c: char| !c.is_alphanumeric() && c != '_')
+        .filter(|part| part.len() >= 2)
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
+
+    let aliases: [(&str, &[&str]); 15] = [
+        ("клиент", &["sales","crm","lead"]),
+        ("лид", &["sales","crm","lead"]),
+        ("продаж", &["sales","crm"]),
+        ("контент", &["smm","content"]),
+        ("реклам", &["ads","marketing"]),
+        ("письм", &["email"]),
+        ("почт", &["email"]),
+        ("календар", &["calendar","schedule"]),
+        ("браузер", &["browser","web"]),
+        ("сайт", &["browser","web"]),
+        ("файл", &["computer","filesystem"]),
+        ("компьютер", &["computer","desktop"]),
+        ("памят", &["memory"]),
+        ("анализ", &["analyze","analysis"]),
+        ("трейд", &["trading","market"]),
+    ];
+    let snapshot = terms.clone();
+    for term in snapshot {
+        for (needle, mapped) in aliases {
+            if term.contains(needle) {
+                terms.extend(mapped.iter().map(|v|v.to_string()));
+            }
+        }
+    }
+    terms
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CapabilityQuery {
     pub capability: Option<String>,
@@ -184,6 +229,54 @@ impl CapabilityGraph {
         }
         out.sort_by(|a,b| b.score.cmp(&a.score).then_with(|| a.repository.cmp(&b.repository)));
         out
+    }
+
+    pub fn route_goal(&self, goal: &str, max_routes: usize) -> Vec<GoalRoute> {
+        let terms = goal_terms(goal);
+        let mut routes = Vec::new();
+        for node in self.capabilities.values() {
+            if node.providers.is_empty() { continue; }
+            let capability_terms = node.name
+                .split(|c: char| c == '.' || c == '_' || c == '-')
+                .map(|v|v.to_ascii_lowercase())
+                .collect::<BTreeSet<_>>();
+            let tag_terms = node.tags.iter().map(|v|v.to_ascii_lowercase()).collect::<BTreeSet<_>>();
+            let mut matched = BTreeSet::new();
+            let mut score = 0i64;
+            for term in &terms {
+                if capability_terms.contains(term) {
+                    matched.insert(term.clone());
+                    score += 30;
+                }
+                if tag_terms.contains(term) {
+                    matched.insert(term.clone());
+                    score += 20;
+                }
+                if node.name.to_ascii_lowercase().contains(term) {
+                    matched.insert(term.clone());
+                    score += 10;
+                }
+            }
+            if score == 0 { continue; }
+            for provider in &node.providers {
+                let repository = node.repositories.iter().next().cloned();
+                routes.push(GoalRoute {
+                    capability: node.name.clone(),
+                    provider: provider.clone(),
+                    repository,
+                    score,
+                    matched_terms: matched.clone(),
+                });
+            }
+        }
+        routes.sort_by(|a,b| {
+            b.score.cmp(&a.score)
+                .then_with(|| a.capability.cmp(&b.capability))
+                .then_with(|| a.provider.cmp(&b.provider))
+        });
+        routes.dedup_by(|a,b| a.capability == b.capability && a.provider == b.provider);
+        routes.truncate(max_routes.max(1));
+        routes
     }
 
     pub fn resolve_capability(&self, capability: &str) -> Vec<&CapabilityNode> {
