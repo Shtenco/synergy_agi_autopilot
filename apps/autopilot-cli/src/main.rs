@@ -112,6 +112,10 @@ fn initial_plugin_registry() -> Result<PluginRegistry, String> {
         include_str!("../../../plugins/agent-fabric/plugin.json"),
         include_str!("../../../plugins/auto-company/plugin.json"),
         include_str!("../../../plugins/browser/plugin.json"),
+        include_str!("../../../plugins/connector-gateway/plugin.json"),
+        include_str!("../../../plugins/email/plugin.json"),
+        include_str!("../../../plugins/calendar/plugin.json"),
+        include_str!("../../../plugins/crm/plugin.json"),
     ] {
         let manifest = parse_manifest_json(raw).map_err(|error| error.to_string())?;
         registry.register(manifest).map_err(|error| error.to_string())?;
@@ -509,6 +513,10 @@ async fn main() -> Result<(), String> {
             config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
             config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
             config.bearer_token_env.insert("business.auto-company".into(), "SYNERGY_API_TOKEN".into());
+            config.bearer_token_env.insert("connector.gateway".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.email".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.calendar".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.crm".into(), "CONNECTOR_GATEWAY_TOKEN".into());
             for plugin_id in registry.list().map(|manifest| manifest.id.clone()).collect::<Vec<_>>() {
                 if !allow_env.is_empty() { config.env_allowlist.insert(plugin_id, allow_env.clone()); }
             }
