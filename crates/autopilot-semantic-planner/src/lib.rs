@@ -59,6 +59,34 @@ impl JsonContractValidator {
 
 fn validate_at(schema: &Value, value: &Value, path: &str, errors: &mut Vec<String>) {
     let Some(object) = schema.as_object() else { return };
+
+    if let Some(variants) = object.get("allOf").and_then(Value::as_array) {
+        for variant in variants {
+            validate_at(variant, value, path, errors);
+        }
+    }
+    if let Some(variants) = object.get("anyOf").and_then(Value::as_array) {
+        let matched = variants.iter().any(|variant| {
+            let mut local = Vec::new();
+            validate_at(variant, value, path, &mut local);
+            local.is_empty()
+        });
+        if !matched {
+            errors.push(format!("{path}: value does not match anyOf"));
+            return;
+        }
+    }
+    if let Some(variants) = object.get("oneOf").and_then(Value::as_array) {
+        let matched = variants.iter().filter(|variant| {
+            let mut local = Vec::new();
+            validate_at(variant, value, path, &mut local);
+            local.is_empty()
+        }).count();
+        if matched != 1 {
+            errors.push(format!("{path}: value must match exactly one oneOf variant"));
+            return;
+        }
+    }
     if let Some(constant) = object.get("const") {
         if value != constant {
             errors.push(format!("{path}: value does not match const"));
@@ -111,6 +139,31 @@ fn validate_at(schema: &Value, value: &Value, path: &str, errors: &mut Vec<Strin
             validate_at(items_schema, item, &format!("{path}[{index}]"), errors);
         }
     }
+    if let Some(number) = value.as_f64() {
+        if let Some(minimum) = object.get("minimum").and_then(Value::as_f64) {
+            if number < minimum {
+                errors.push(format!("{path}: number is below minimum={minimum}"));
+            }
+        }
+        if let Some(maximum) = object.get("maximum").and_then(Value::as_f64) {
+            if number > maximum {
+                errors.push(format!("{path}: number is above maximum={maximum}"));
+            }
+        }
+    }
+    if let Some(items) = value.as_array() {
+        if let Some(minimum) = object.get("minItems").and_then(Value::as_u64) {
+            if items.len() < minimum as usize {
+                errors.push(format!("{path}: array shorter than minItems={minimum}"));
+            }
+        }
+        if let Some(maximum) = object.get("maxItems").and_then(Value::as_u64) {
+            if items.len() > maximum as usize {
+                errors.push(format!("{path}: array longer than maxItems={maximum}"));
+            }
+        }
+    }
+
     if let Some(text) = value.as_str() {
         if let Some(min) = object.get("minLength").and_then(Value::as_u64) {
             if text.chars().count() < min as usize {
@@ -631,6 +684,23 @@ mod tests {
         ).unwrap();
         assert_eq!(mapped.arguments["client_id"], "abc-42");
         assert!(mapped.valid());
+    }
+
+    #[test]
+    fn validates_combinators_and_bounds() {
+        let schema = serde_json::json!({
+            "oneOf":[
+                {"type":"integer","minimum":1,"maximum":10},
+                {"type":"string","enum":["auto"]}
+            ]
+        });
+        assert!(JsonContractValidator::validate(&schema, &serde_json::json!(5)).is_empty());
+        assert!(JsonContractValidator::validate(&schema, &serde_json::json!("auto")).is_empty());
+        assert!(!JsonContractValidator::validate(&schema, &serde_json::json!(50)).is_empty());
+
+        let array = serde_json::json!({"type":"array","minItems":2,"maxItems":3,"items":{"type":"string"}});
+        assert!(!JsonContractValidator::validate(&array, &serde_json::json!(["one"])).is_empty());
+        assert!(JsonContractValidator::validate(&array, &serde_json::json!(["one","two"])).is_empty());
     }
 
     #[test]
