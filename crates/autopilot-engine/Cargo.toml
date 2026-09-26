@@ -14,6 +14,7 @@ autopilot-fleet = { path = "../autopilot-fleet" }
 autopilot-harness = { path = "../autopilot-harness" }
 autopilot-policy = { path = "../autopilot-policy" }
 autopilot-plugin-runtime = { path = "../autopilot-plugin-runtime" }
+autopilot-semantic-planner = { path = "../autopilot-semantic-planner" }
 autopilot-router = { path = "../autopilot-router" }
 autopilot-runtime = { path = "../autopilot-runtime" }
 autopilot-verification = { path = "../autopilot-verification" }
