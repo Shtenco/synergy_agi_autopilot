@@ -108,6 +108,65 @@ impl PluginManifest {
         if self.version.trim().is_empty() {
             return Err(PluginError::InvalidManifest("plugin version is empty".into()));
         }
+        if let Some(adapter) = &self.adapter {
+            if self.enabled_by_default {
+                return Err(PluginError::InvalidManifest(
+                    "plugins with generated adapter specs must be disabled by default".into()
+                ));
+            }
+            match adapter {
+                PluginAdapter::OpenApi { base_url, operation_id, document } => {
+                    if self.kind != PluginKind::OpenApi {
+                        return Err(PluginError::InvalidManifest("OpenAPI adapter requires kind=open_api".into()));
+                    }
+                    let lower = base_url.to_ascii_lowercase();
+                    if !(lower.starts_with("https://")
+                        || lower.starts_with("http://127.0.0.1")
+                        || lower.starts_with("http://localhost"))
+                    {
+                        return Err(PluginError::InvalidManifest(
+                            "OpenAPI adapter base_url must use HTTPS except loopback".into()
+                        ));
+                    }
+                    if operation_id.trim().is_empty() {
+                        return Err(PluginError::InvalidManifest("OpenAPI adapter operation_id is empty".into()));
+                    }
+                    let found = document.get("paths").and_then(serde_json::Value::as_object).is_some_and(|paths| {
+                        paths.values().filter_map(serde_json::Value::as_object).any(|methods| {
+                            methods.values().filter_map(serde_json::Value::as_object).any(|operation| {
+                                operation.get("operationId").and_then(serde_json::Value::as_str)
+                                    == Some(operation_id.as_str())
+                            })
+                        })
+                    });
+                    if !found {
+                        return Err(PluginError::InvalidManifest(
+                            format!("OpenAPI adapter operationId not found: {operation_id}")
+                        ));
+                    }
+                }
+                PluginAdapter::McpStdio { command, args, tool } => {
+                    if self.kind != PluginKind::Mcp {
+                        return Err(PluginError::InvalidManifest("MCP adapter requires kind=mcp".into()));
+                    }
+                    if invalid_program(command) || args.iter().any(|arg| contains_shell_meta(arg)) {
+                        return Err(PluginError::InvalidManifest("unsafe MCP command or arguments".into()));
+                    }
+                    if tool.trim().is_empty() {
+                        return Err(PluginError::InvalidManifest("MCP adapter tool is empty".into()));
+                    }
+                }
+                PluginAdapter::Cli { program, args } => {
+                    if self.kind != PluginKind::Cli {
+                        return Err(PluginError::InvalidManifest("CLI adapter requires kind=cli".into()));
+                    }
+                    if invalid_program(program) || args.iter().any(|arg| contains_shell_meta(arg)) {
+                        return Err(PluginError::InvalidManifest("unsafe CLI program or arguments".into()));
+                    }
+                }
+            }
+        }
+
         let mut seen = BTreeSet::new();
         for capability in &self.capabilities {
             if capability.name.trim().is_empty() {
@@ -175,6 +234,15 @@ impl PluginRegistry {
         Ok(())
     }
 }
+
+fn contains_shell_meta(value: &str) -> bool {
+    [';', '|', '&', '>', '<', '`', '\n', '\r'].iter().any(|c| value.contains(*c))
+}
+
+fn invalid_program(value: &str) -> bool {
+    value.trim().is_empty() || contains_shell_meta(value)
+}
+
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum PluginError {
