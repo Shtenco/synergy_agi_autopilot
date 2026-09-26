@@ -795,8 +795,10 @@ async fn main() -> Result<(), String> {
             );
         },
         Commands::SemanticGap { goal } => {
-            let graph = initial_capability_graph()?;
-            match SemanticGapDetector::self_build_plan(&graph, &goal) {
+            let registry = initial_plugin_registry()?;
+            let mut graph = initial_capability_graph()?;
+            graph.attach_plugins(&registry);
+            match SemanticGapDetector::self_build_plan_typed(&graph, &registry, &goal) {
                 Some(plan) => println!("{}", serde_json::to_string_pretty(&plan).map_err(|error| error.to_string())?),
                 None => println!("no semantic gap: executable provider already matches this goal"),
             }
@@ -882,7 +884,7 @@ async fn main() -> Result<(), String> {
                 wsl_distro.as_deref(),
             )?;
 
-            if SemanticGapDetector::detect(&graph, &goal).is_some() {
+            if SemanticGapDetector::detect_typed(&graph, &registry, &goal).is_some() {
                 let allowed_programs = allow_generated_program.iter().cloned().collect::<BTreeSet<_>>();
                 let discovery = BuildDiscoveryChain::new(vec![
                     Arc::new(FilesystemOpenApiDiscovery::new(discovery_root.clone(), base_url)),
@@ -903,7 +905,7 @@ async fn main() -> Result<(), String> {
                     SelfBuildPolicy::default(),
                     generated_plugins.clone(),
                 );
-                let outcome = coordinator.ensure_for_goal(&graph, &goal).await
+                let outcome = coordinator.ensure_typed_for_goal(&graph, &registry, &goal).await
                     .map_err(|error| error.to_string())?;
                 println!(
                     "self_build_outcome={}\n",
