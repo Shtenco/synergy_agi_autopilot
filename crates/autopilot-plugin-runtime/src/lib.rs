@@ -740,7 +740,7 @@ fn split_openapi_arguments(contract: Option<&Value>, input: &Value) -> OpenApiAr
     if body.is_null() {
         if let Some(arguments) = input.as_object() {
             let non_meta = arguments.iter()
-                .filter(|(key, _)| !key.starts_with('_') && *key != "oauth2")
+                .filter(|(key, _)| !key.starts_with('_') && key.as_str() != "oauth2")
                 .map(|(key,value)|(key.clone(),value.clone()))
                 .collect::<serde_json::Map<_,_>>();
             if properties.is_none() && !non_meta.is_empty() {
@@ -761,7 +761,7 @@ fn sanitize_contract_input(value: &Value) -> Value {
     match value {
         Value::Object(map) => Value::Object(
             map.iter()
-                .filter(|(key, _)| !key.starts_with('_'))
+                .filter(|(key, _)| !key.starts_with('_') && key.as_str() != "oauth2")
                 .map(|(key, value)| (key.clone(), sanitize_contract_input(value)))
                 .collect()
         ),
