@@ -19,7 +19,7 @@ use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, Fle
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
-use autopilot_plugin_builder::{BuildRequest, CandidateStore, FilesystemOpenApiDiscovery, PluginBuilder, SandboxQualifier, SelfBuildCoordinator, SelfBuildOutcome, SelfBuildPolicy, SemanticGapDetector};
+use autopilot_plugin_builder::{BuildDiscoveryChain, BuildRequest, CandidateStore, FilesystemMcpDiscovery, FilesystemOpenApiDiscovery, PluginBuilder, SandboxQualifier, SelfBuildCoordinator, SelfBuildOutcome, SelfBuildPolicy, SemanticGapDetector};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
@@ -696,12 +696,26 @@ async fn main() -> Result<(), String> {
         } => {
             let mut graph = initial_capability_graph()?;
             let mut registry = initial_plugin_registry()?;
+            let execution_runtime = build_plugin_runtime(
+                &runtime,
+                workspace.as_deref(),
+                docker_image.as_deref(),
+                wsl_distro.as_deref(),
+            )?;
 
             if SemanticGapDetector::detect(&graph, &goal).is_some() {
-                let discovery = FilesystemOpenApiDiscovery::new(discovery_root, base_url);
+                let allowed_programs = allow_generated_program.iter().cloned().collect::<BTreeSet<_>>();
+                let discovery = BuildDiscoveryChain::new(vec![
+                    Arc::new(FilesystemOpenApiDiscovery::new(discovery_root.clone(), base_url)),
+                    Arc::new(FilesystemMcpDiscovery::new(
+                        discovery_root,
+                        execution_runtime.clone(),
+                        allowed_programs.clone(),
+                    )),
+                ]);
                 let qualifier = SandboxQualifier::new(
-                    Arc::new(NativeRuntime::default()),
-                    BTreeSet::new(),
+                    execution_runtime.clone(),
+                    allowed_programs,
                 );
                 let coordinator = SelfBuildCoordinator::new(
                     CandidateStore::new(quarantine),
@@ -735,12 +749,6 @@ async fn main() -> Result<(), String> {
                 }
             }
 
-            let execution_runtime = build_plugin_runtime(
-                &runtime,
-                workspace.as_deref(),
-                docker_image.as_deref(),
-                wsl_distro.as_deref(),
-            )?;
             let mut config = PluginRuntimeConfig::default();
             config.local_workspace = workspace;
             config.control_plane_db = control_db;
