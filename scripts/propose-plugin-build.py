@@ -106,6 +106,27 @@ def main()->None:
                     "requires_approval":approval,
                     "tags":["generated","mcp"],
                 }
+        elif kind=="cli_descriptor":
+            if surface.get("capability") != args.capability:
+                proposal["reason"]="Declarative CLI capability does not match requested capability"
+            else:
+                proposal["ready_to_build"]=True
+                proposal["build_request"]={
+                    "plugin_id":args.plugin_id,
+                    "display_name":args.name,
+                    "capability":args.capability,
+                    "source":{
+                        "type":"cli",
+                        "program":surface["program"],
+                        "args":surface.get("args") or [],
+                    },
+                    "risk":surface.get("risk") or "Medium",
+                    "requires_approval":bool(surface.get("requires_approval", False)),
+                    "input_contract":surface.get("input_schema") or {
+                        "type":"object","properties":{},"additionalProperties":True
+                    },
+                    "tags":["generated","cli",*(surface.get("tags") or [])],
+                }
         elif kind=="cli":
             proposal["reason"]="CLI entrypoint discovered, but capability-to-argv/stdin semantics require explicit mapping before build"
         proposals.append(proposal)
