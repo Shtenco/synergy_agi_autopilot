@@ -126,6 +126,41 @@ def discover_pyproject(path: Path) -> list[dict[str, Any]]:
         "probe_args":["--help"],
     } for name, target in scripts.items()]
 
+def discover_cli_descriptor(path: Path) -> list[dict[str, Any]]:
+    if path.name not in {"synergy.cli.json", "cli-capabilities.json"}:
+        return []
+    try:
+        doc = json.loads(safe_read(path).decode("utf-8"))
+    except Exception:
+        return []
+    if not isinstance(doc, dict) or doc.get("schema") != "synergy.cli-capabilities.v1":
+        return []
+    out: list[dict[str, Any]] = []
+    for command in doc.get("commands") or []:
+        if not isinstance(command, dict):
+            continue
+        program = command.get("program")
+        capability = command.get("capability")
+        input_schema = command.get("input_schema")
+        if not isinstance(program, str) or not isinstance(capability, str) or not isinstance(input_schema, dict):
+            continue
+        args = command.get("args") or []
+        if not isinstance(args, list) or not all(isinstance(v, str) for v in args):
+            continue
+        out.append({
+            "surface":"cli_descriptor",
+            "file":str(path),
+            "program":program,
+            "args":args,
+            "capability":capability,
+            "input_schema":input_schema,
+            "risk":str(command.get("risk") or "Medium"),
+            "requires_approval":bool(command.get("requires_approval", False)),
+            "tags":[str(v) for v in (command.get("tags") or []) if isinstance(v, str)],
+        })
+    return out
+
+
 def discover_package_json(path: Path) -> list[dict[str, Any]]:
     if path.name != "package.json":
         return []
@@ -174,6 +209,7 @@ def main() -> None:
         surfaces.extend(discover_cargo(path))
         surfaces.extend(discover_pyproject(path))
         surfaces.extend(discover_package_json(path))
+        surfaces.extend(discover_cli_descriptor(path))
 
     result = {
         "schema":"synergy.plugin-discovery.v1",
