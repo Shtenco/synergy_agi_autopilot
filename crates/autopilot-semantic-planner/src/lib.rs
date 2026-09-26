@@ -233,7 +233,7 @@ fn map_field(
             return Some(Value::String(url));
         }
     }
-    if matches_alias(&normalized, &["query","search","q","поиск","запрос"]) {
+    if matches_alias(&normalized, &["query","search","q","поиск","запрос","prompt","goal","instruction","цель","задача"]) {
         evidence.push(MappingEvidence { field: field.into(), source: "goal.full".into(), confidence: 80 });
         return Some(Value::String(goal.to_string()));
     }
@@ -257,16 +257,21 @@ fn map_field(
     }
 
     match kind {
-        "integer" => extract_first_integer(goal).map(|number| {
-            evidence.push(MappingEvidence { field: field.into(), source: "goal.integer".into(), confidence: 60 });
-            Value::Number(Number::from(number))
-        }),
-        "number" => extract_first_number(goal).and_then(Number::from_f64).map(|number| {
-            evidence.push(MappingEvidence { field: field.into(), source: "goal.number".into(), confidence: 60 });
-            Value::Number(number)
-        }),
-        "boolean" => extract_boolean(goal).map(|value| {
-            evidence.push(MappingEvidence { field: field.into(), source: "goal.boolean".into(), confidence: 65 });
+        "integer" => extract_number_after_field(goal, field)
+            .and_then(|value| value.parse::<i64>().ok())
+            .map(|number| {
+                evidence.push(MappingEvidence { field: field.into(), source: "goal.field_integer".into(), confidence: 82 });
+                Value::Number(Number::from(number))
+            }),
+        "number" => extract_number_after_field(goal, field)
+            .and_then(|value| value.replace(',', ".").parse::<f64>().ok())
+            .and_then(Number::from_f64)
+            .map(|number| {
+                evidence.push(MappingEvidence { field: field.into(), source: "goal.field_number".into(), confidence: 82 });
+                Value::Number(number)
+            }),
+        "boolean" => extract_boolean_after_field(goal, field).map(|value| {
+            evidence.push(MappingEvidence { field: field.into(), source: "goal.field_boolean".into(), confidence: 82 });
             Value::Bool(value)
         }),
         "string" => {
@@ -366,6 +371,41 @@ fn extract_id(text: &str, field: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn extract_number_after_field(text: &str, field: &str) -> Option<String> {
+    let lower = text.to_ascii_lowercase();
+    let aliases = [
+        field.to_ascii_lowercase(),
+        field.replace('_', " ").to_ascii_lowercase(),
+    ];
+    for alias in aliases {
+        if let Some(index) = lower.find(&alias) {
+            let rest = text[index + alias.len()..]
+                .trim_start_matches(|c: char| c.is_whitespace() || matches!(c, ':' | '=' | '-' | '—'));
+            let token = rest.split_whitespace().next()
+                .map(|value| value.trim_matches(|c: char| ",.;()[]{}%$₽₸".contains(c)))
+                .unwrap_or("");
+            if token.chars().any(|ch| ch.is_ascii_digit()) {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn extract_boolean_after_field(text: &str, field: &str) -> Option<bool> {
+    let lower = text.to_ascii_lowercase();
+    let alias = field.replace('_', " ").to_ascii_lowercase();
+    let index = lower.find(&alias)?;
+    let rest = lower[index + alias.len()..].trim_start();
+    if rest.starts_with("true") || rest.starts_with("yes") || rest.starts_with("да") || rest.starts_with("вкл") {
+        Some(true)
+    } else if rest.starts_with("false") || rest.starts_with("no") || rest.starts_with("нет") || rest.starts_with("выкл") {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 fn extract_first_integer(text: &str) -> Option<i64> {
