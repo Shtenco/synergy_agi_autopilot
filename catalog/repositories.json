@@ -1,0 +1,1300 @@
+{
+  "schema": "synergy.repository-capability-catalog.v1",
+  "owner": "Shtenco",
+  "repository_count": 73,
+  "generated_from": "GitHub repository metadata; enrichment script can add README/manifests",
+  "repositories": [
+    {
+      "name": "shtenco.github.io",
+      "full_name": "Shtenco/shtenco.github.io",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "quantum-trading_metatrader5",
+      "full_name": "Shtenco/quantum-trading_metatrader5",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "science",
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "computer_vision_trading_metatrader_5",
+      "full_name": "Shtenco/computer_vision_trading_metatrader_5",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "swap_arbitrage_metatrader_5",
+      "full_name": "Shtenco/swap_arbitrage_metatrader_5",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "cross_forex_arbitrage_trading_metatrader_5",
+      "full_name": "Shtenco/cross_forex_arbitrage_trading_metatrader_5",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "runtime",
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "global_liquidity_dataminer",
+      "full_name": "Shtenco/global_liquidity_dataminer",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "3D_bars_market_structure",
+      "full_name": "Shtenco/3D_bars_market_structure",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "multi_threaded_trading_robot_with_machine_learning_python",
+      "full_name": "Shtenco/multi_threaded_trading_robot_with_machine_learning_python",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_midas_ai_trading_system",
+      "full_name": "Shtenco/synergy_midas_ai_trading_system",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "runtime",
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "midas_lite",
+      "full_name": "Shtenco/midas_lite",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_turbo_linux",
+      "full_name": "Shtenco/synergy_turbo_linux",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "runtime"
+      ],
+      "capabilities": [
+        "computer.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_agi_olga",
+      "full_name": "Shtenco/synergy_agi_olga",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [
+        "intelligence.infer"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_ai_coder",
+      "full_name": "Shtenco/synergy_ai_coder",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_ai_trade_terminal",
+      "full_name": "Shtenco/synergy_ai_trade_terminal",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "shtencoauantai.github.io",
+      "full_name": "Shtenco/shtencoauantai.github.io",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_cashero",
+      "full_name": "Shtenco/synergy_cashero",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_ai_language",
+      "full_name": "Shtenco/synergy_ai_language",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [
+        "intelligence.infer"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "sinergy_super_app",
+      "full_name": "Shtenco/sinergy_super_app",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "apps"
+      ],
+      "capabilities": [
+        "app.interface"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "binary_quantum_theory",
+      "full_name": "Shtenco/binary_quantum_theory",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "science",
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_ai_financial_system",
+      "full_name": "Shtenco/synergy_ai_financial_system",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "finance",
+        "runtime"
+      ],
+      "capabilities": [
+        "finance.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_algotrading_graph_system",
+      "full_name": "Shtenco/synergy_algotrading_graph_system",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "runtime",
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synegy_ai_compress",
+      "full_name": "Shtenco/synegy_ai_compress",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "compression"
+      ],
+      "capabilities": [
+        "compression.encode"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_pay_system",
+      "full_name": "Shtenco/synergy_pay_system",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "finance",
+        "runtime"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_ai_blockchain",
+      "full_name": "Shtenco/synergy_ai_blockchain",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "blockchain"
+      ],
+      "capabilities": [
+        "blockchain.submit"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_chain",
+      "full_name": "Shtenco/synergy_chain",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "blockchain"
+      ],
+      "capabilities": [
+        "blockchain.submit"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergychain.github.io",
+      "full_name": "Shtenco/synergychain.github.io",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "ai",
+        "blockchain"
+      ],
+      "capabilities": [
+        "blockchain.submit"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_cold_nuclear",
+      "full_name": "Shtenco/synergy_cold_nuclear",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [
+        "science"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_usds",
+      "full_name": "Shtenco/synergy_usds",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_financial_os",
+      "full_name": "Shtenco/synergy_financial_os",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "finance",
+        "runtime"
+      ],
+      "capabilities": [
+        "finance.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_eurasian",
+      "full_name": "Shtenco/synergy_eurasian",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_matrix_sota",
+      "full_name": "Shtenco/synergy_matrix_sota",
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_agi_nexus",
+      "full_name": "Shtenco/synergy_agi_nexus",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [
+        "intelligence.infer",
+        "memory.search"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_midas_ai",
+      "full_name": "Shtenco/synergy_midas_ai",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_system",
+      "full_name": "Shtenco/synergy_system",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "runtime"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_nexus_science_agent",
+      "full_name": "Shtenco/synergy_nexus_science_agent",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "science"
+      ],
+      "capabilities": [
+        "intelligence.infer",
+        "memory.search"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_net",
+      "full_name": "Shtenco/synergy_net",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "network"
+      ],
+      "capabilities": [
+        "network.transport"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_meta_os",
+      "full_name": "Shtenco/synergy_meta_os",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "runtime"
+      ],
+      "capabilities": [
+        "computer.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_blochain_budget",
+      "full_name": "Shtenco/synergy_blochain_budget",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "blockchain",
+        "finance"
+      ],
+      "capabilities": [
+        "blockchain.submit",
+        "finance.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_agi_autopilot",
+      "full_name": "Shtenco/synergy_agi_autopilot",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [
+        "business.operate",
+        "intelligence.infer"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "sinergy_app",
+      "full_name": "Shtenco/sinergy_app",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "apps"
+      ],
+      "capabilities": [
+        "app.interface"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_app",
+      "full_name": "Shtenco/synergy_app",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "apps"
+      ],
+      "capabilities": [
+        "app.interface"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_qr_compress",
+      "full_name": "Shtenco/synergy_qr_compress",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "compression"
+      ],
+      "capabilities": [
+        "compression.encode"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_metachain",
+      "full_name": "Shtenco/synergy_metachain",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "blockchain"
+      ],
+      "capabilities": [
+        "blockchain.submit"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_motherboard_xpu_xml",
+      "full_name": "Shtenco/synergy_motherboard_xpu_xml",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "runtime"
+      ],
+      "capabilities": [
+        "computer.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "print_money_synergychain",
+      "full_name": "Shtenco/print_money_synergychain",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "blockchain",
+        "finance"
+      ],
+      "capabilities": [
+        "blockchain.submit"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_project",
+      "full_name": "Shtenco/synergy_project",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "dlp_solver",
+      "full_name": "Shtenco/dlp_solver",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_crypto_pump",
+      "full_name": "Shtenco/synergy_crypto_pump",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "blockchain"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_graph_print_money",
+      "full_name": "Shtenco/synergy_graph_print_money",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "finance"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_app_family",
+      "full_name": "Shtenco/synergy_app_family",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "apps"
+      ],
+      "capabilities": [
+        "app.interface"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_chain_print_money",
+      "full_name": "Shtenco/synergy_chain_print_money",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "blockchain",
+        "finance"
+      ],
+      "capabilities": [
+        "blockchain.submit"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_ai_company",
+      "full_name": "Shtenco/synergy_ai_company",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "business"
+      ],
+      "capabilities": [
+        "business.operate"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_shhts",
+      "full_name": "Shtenco/synergy_shhts",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "network"
+      ],
+      "capabilities": [
+        "network.transport"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_shttps",
+      "full_name": "Shtenco/synergy_shttps",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "network"
+      ],
+      "capabilities": [
+        "network.transport"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_gguf_compress",
+      "full_name": "Shtenco/synergy_gguf_compress",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "compression"
+      ],
+      "capabilities": [
+        "compression.encode"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_gllm_nexus",
+      "full_name": "Shtenco/synergy_gllm_nexus",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [
+        "intelligence.infer",
+        "memory.search"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_messenger",
+      "full_name": "Shtenco/synergy_messenger",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "network"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_apps",
+      "full_name": "Shtenco/synergy_apps",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "apps"
+      ],
+      "capabilities": [
+        "app.interface"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_agi_trader",
+      "full_name": "Shtenco/synergy_agi_trader",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "trading"
+      ],
+      "capabilities": [
+        "intelligence.infer",
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_quantlab",
+      "full_name": "Shtenco/synergy_quantlab",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_riskguard",
+      "full_name": "Shtenco/synergy_riskguard",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_market_graph",
+      "full_name": "Shtenco/synergy_market_graph",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_midas_institutional",
+      "full_name": "Shtenco/synergy_midas_institutional",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_relative_value",
+      "full_name": "Shtenco/synergy_relative_value",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_ai_investment_committee",
+      "full_name": "Shtenco/synergy_ai_investment_committee",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [
+        "finance.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_market_maker",
+      "full_name": "Shtenco/synergy_market_maker",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_adaptive_engine",
+      "full_name": "Shtenco/synergy_adaptive_engine",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_marketvision",
+      "full_name": "Shtenco/synergy_marketvision",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_trademux",
+      "full_name": "Shtenco/synergy_trademux",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "trading"
+      ],
+      "capabilities": [
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "epstein_network",
+      "full_name": "Shtenco/epstein_network",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "network"
+      ],
+      "capabilities": [
+        "network.transport"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_2chain_qe",
+      "full_name": "Shtenco/synergy_2chain_qe",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai",
+        "blockchain",
+        "finance"
+      ],
+      "capabilities": [
+        "blockchain.submit"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_qe",
+      "full_name": "Shtenco/synergy_qe",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "finance"
+      ],
+      "capabilities": [],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    },
+    {
+      "name": "synergy_agentic_ai_economy",
+      "full_name": "Shtenco/synergy_agentic_ai_economy",
+      "default_branch": "main",
+      "visibility": "private",
+      "archived": false,
+      "tags": [
+        "ai"
+      ],
+      "capabilities": [
+        "business.operate"
+      ],
+      "transports": [],
+      "plugin_ids": [],
+      "evidence": [
+        "github-metadata:name"
+      ]
+    }
+  ]
+}
