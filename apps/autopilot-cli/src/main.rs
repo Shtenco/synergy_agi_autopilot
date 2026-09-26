@@ -884,16 +884,16 @@ async fn main() -> Result<(), String> {
                 wsl_distro.as_deref(),
             )?;
 
-            if SemanticGapDetector::detect_typed(&graph, &registry, &goal).is_some() {
+            {
                 let allowed_programs = allow_generated_program.iter().cloned().collect::<BTreeSet<_>>();
                 let discovery = BuildDiscoveryChain::new(vec![
-                    Arc::new(FilesystemOpenApiDiscovery::new(discovery_root.clone(), base_url)),
+                    Arc::new(FilesystemOpenApiDiscovery::new(discovery_root.clone(), base_url.clone())),
                     Arc::new(FilesystemMcpDiscovery::new(
                         discovery_root.clone(),
                         execution_runtime.clone(),
                         allowed_programs.clone(),
                     )),
-                    Arc::new(FilesystemCliDescriptorDiscovery::new(discovery_root)),
+                    Arc::new(FilesystemCliDescriptorDiscovery::new(discovery_root.clone())),
                 ]);
                 let qualifier = SandboxQualifier::new(
                     execution_runtime.clone(),
@@ -906,28 +906,66 @@ async fn main() -> Result<(), String> {
                     SelfBuildPolicy::default(),
                     generated_plugins.clone(),
                 );
-                let outcome = coordinator.ensure_typed_for_goal(&graph, &registry, &goal).await
-                    .map_err(|error| error.to_string())?;
-                println!(
-                    "self_build_outcome={}\n",
-                    serde_json::to_string_pretty(&outcome).map_err(|error| error.to_string())?
-                );
 
-                match outcome {
-                    SelfBuildOutcome::Promoted { manifest_path, .. } => {
-                        let raw = fs::read_to_string(&manifest_path)
-                            .map_err(|error| format!("cannot read promoted manifest {}: {error}", manifest_path.display()))?;
-                        let manifest = parse_manifest_json(&raw).map_err(|error| error.to_string())?;
-                        registry.upsert(manifest).map_err(|error| error.to_string())?;
-                        registry.validate_dependencies().map_err(|error| error.to_string())?;
-                        graph.attach_plugins(&registry);
+                for _ in 0..16 {
+                    let gaps = SemanticGapDetector::typed_gaps_for_goal(&graph, &registry, &goal);
+                    if gaps.is_empty() {
+                        break;
                     }
-                    SelfBuildOutcome::ExistingProvider => {}
-                    SelfBuildOutcome::DiscoveryEmpty { .. }
-                    | SelfBuildOutcome::CandidateRejected { .. }
-                    | SelfBuildOutcome::QualifiedAwaitingPromotion { .. } => {
-                        return Err("self-build did not yield an auto-promoted executable provider".into());
+                    let mut progressed = false;
+                    for gap in gaps {
+                        let objective = gap.goal.clone();
+                        let outcome = coordinator.ensure_typed_for_goal(&graph, &registry, &objective).await
+                            .map_err(|error| error.to_string())?;
+                        println!(
+                            "self_build_objective={}\nself_build_outcome={}\n",
+                            objective,
+                            serde_json::to_string_pretty(&outcome).map_err(|error| error.to_string())?
+                        );
+                        match outcome {
+                            SelfBuildOutcome::Promoted { manifest_path, .. } => {
+                                let raw = fs::read_to_string(&manifest_path)
+                                    .map_err(|error| format!(
+                                        "cannot read promoted manifest {}: {error}",
+                                        manifest_path.display()
+                                    ))?;
+                                let manifest = parse_manifest_json(&raw).map_err(|error| error.to_string())?;
+                                registry.upsert(manifest).map_err(|error| error.to_string())?;
+                                registry.validate_dependencies().map_err(|error| error.to_string())?;
+                                graph.attach_plugins(&registry);
+                                progressed = true;
+                            }
+                            SelfBuildOutcome::ExistingProvider => {}
+                            SelfBuildOutcome::QualifiedAwaitingPromotion { candidate } => {
+                                return Err(format!(
+                                    "typed capability for objective {:?} is qualified but requires explicit promotion/approval: {}",
+                                    objective, candidate.manifest.id
+                                ));
+                            }
+                            SelfBuildOutcome::DiscoveryEmpty { .. } => {
+                                return Err(format!(
+                                    "no typed provider or buildable adapter found for workflow objective: {objective}"
+                                ));
+                            }
+                            SelfBuildOutcome::CandidateRejected { candidate } => {
+                                return Err(format!(
+                                    "all discovered adapters for objective {:?} failed qualification; last candidate={}",
+                                    objective, candidate.manifest.id
+                                ));
+                            }
+                        }
                     }
+                    if !progressed {
+                        break;
+                    }
+                }
+
+                let remaining = SemanticGapDetector::typed_gaps_for_goal(&graph, &registry, &goal);
+                if !remaining.is_empty() {
+                    return Err(format!(
+                        "M9 typed coverage incomplete after self-build: {:?}",
+                        remaining.iter().map(|gap| gap.goal.clone()).collect::<Vec<_>>()
+                    ));
                 }
             }
 
