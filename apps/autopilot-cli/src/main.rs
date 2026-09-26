@@ -6,7 +6,11 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
+use chrono::Utc;
 use autopilot_audit::{AuditStore, InMemoryAuditStore};
+use autopilot_automation::{AutomationEvent, AutomationSpec, Trigger};
+use autopilot_automation_runtime::AutomationRuntime;
+use autopilot_control_plane::{ApprovalRequest, ControlPlaneStore};
 use autopilot_capability_graph::{CapabilityQuery, RepositoryCatalog};
 use autopilot_core::{AgentExecutor, AgentOutcome, Director, DirectorConfig, GoalRequest, PlannedTask, Planner, VerificationOutcome, Verifier};
 use autopilot_delivery::{CiReport, CiState, DeliveryConfig, DeliveryEngine};
@@ -18,6 +22,7 @@ use autopilot_plugins::{parse_manifest_json, PluginRegistry};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
+use uuid::Uuid;
 
 #[derive(Parser)]
 #[command(name = "open-autopilot", version, about = "OPEN AUTOPILOT local autonomous engineering harness")]
@@ -33,6 +38,42 @@ enum Commands {
         #[arg(long = "keyword")] keywords: Vec<String>,
         #[arg(long)] transport: Option<String>,
         #[arg(long, default_value_t = 20)] limit: usize,
+    },
+    AutomationAdd {
+        #[arg(long)] db: PathBuf,
+        #[arg(long)] name: String,
+        #[arg(long)] goal: String,
+        #[arg(long)] trigger_json: String,
+    },
+    AutomationTick {
+        #[arg(long)] db: PathBuf,
+    },
+    AutomationEvent {
+        #[arg(long)] db: PathBuf,
+        #[arg(long)] topic: String,
+        #[arg(long, default_value = "{}")] payload_json: String,
+    },
+    ApprovalRequest {
+        #[arg(long)] db: PathBuf,
+        #[arg(long)] subject: String,
+        #[arg(long, default_value = "{}")] action_json: String,
+    },
+    ApprovalDecide {
+        #[arg(long)] db: PathBuf,
+        #[arg(long)] id: String,
+        #[arg(long)] approve: bool,
+        #[arg(long)] actor: String,
+        #[arg(long)] reason: Option<String>,
+    },
+    BudgetSet {
+        #[arg(long)] db: PathBuf,
+        #[arg(long)] id: String,
+        #[arg(long)] limit_microusd: i64,
+    },
+    BudgetReserve {
+        #[arg(long)] db: PathBuf,
+        #[arg(long)] id: String,
+        #[arg(long)] amount_microusd: i64,
     },
     PluginCall {
         #[arg(long)] plugin: String,
@@ -478,6 +519,62 @@ async fn main() -> Result<(), String> {
                     );
                 }
             }
+        },
+        Commands::AutomationAdd { db, name, goal, trigger_json } => {
+            let trigger: Trigger = serde_json::from_str(&trigger_json)
+                .map_err(|error| format!("invalid --trigger-json: {error}"))?;
+            let spec = AutomationSpec::new(name, goal, trigger);
+            let runtime = AutomationRuntime::open(&db).map_err(|error| error.to_string())?;
+            runtime.control().put_automation(&spec).map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&spec).map_err(|error| error.to_string())?);
+        },
+        Commands::AutomationTick { db } => {
+            let runtime = AutomationRuntime::open(&db).map_err(|error| error.to_string())?;
+            let dispatched = runtime.schedule_due(Utc::now()).map_err(|error| error.to_string())?;
+            println!("dispatched={}", dispatched.len());
+            for item in dispatched {
+                println!("automation={}\tmission={}\tgoal={}", item.automation_id, item.mission_id.0, item.goal);
+            }
+        },
+        Commands::AutomationEvent { db, topic, payload_json } => {
+            let value: serde_json::Value = serde_json::from_str(&payload_json)
+                .map_err(|error| format!("invalid --payload-json: {error}"))?;
+            let object = value.as_object().ok_or_else(|| "--payload-json must be a JSON object".to_string())?;
+            let payload = object.iter().map(|(key,value)|(key.clone(),value.clone())).collect();
+            let runtime = AutomationRuntime::open(&db).map_err(|error| error.to_string())?;
+            let (event_id, dispatched) = runtime.emit_event(AutomationEvent::new(topic, payload))
+                .map_err(|error| error.to_string())?;
+            println!("event={}\tdispatched={}", event_id, dispatched.len());
+            for item in dispatched {
+                println!("automation={}\tmission={}\tgoal={}", item.automation_id, item.mission_id.0, item.goal);
+            }
+        },
+        Commands::ApprovalRequest { db, subject, action_json } => {
+            let action = serde_json::from_str(&action_json)
+                .map_err(|error| format!("invalid --action-json: {error}"))?;
+            let store = ControlPlaneStore::open(&db).map_err(|error| error.to_string())?;
+            let request = ApprovalRequest::pending(subject, action);
+            store.request_approval(&request).map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&request).map_err(|error| error.to_string())?);
+        },
+        Commands::ApprovalDecide { db, id, approve, actor, reason } => {
+            let id = Uuid::parse_str(&id).map_err(|error| format!("invalid approval id: {error}"))?;
+            let store = ControlPlaneStore::open(&db).map_err(|error| error.to_string())?;
+            let request = store.decide_approval(id, approve, &actor, reason.as_deref())
+                .map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&request).map_err(|error| error.to_string())?);
+        },
+        Commands::BudgetSet { db, id, limit_microusd } => {
+            let store = ControlPlaneStore::open(&db).map_err(|error| error.to_string())?;
+            store.set_daily_budget(&id, Utc::now().date_naive(), limit_microusd)
+                .map_err(|error| error.to_string())?;
+            println!("budget_set={}\tlimit_microusd={}", id, limit_microusd.max(0));
+        },
+        Commands::BudgetReserve { db, id, amount_microusd } => {
+            let store = ControlPlaneStore::open(&db).map_err(|error| error.to_string())?;
+            let remaining = store.reserve_budget(&id, Utc::now().date_naive(), amount_microusd)
+                .map_err(|error| error.to_string())?;
+            println!("budget_reserved={}\tamount_microusd={}\tremaining_microusd={}", id, amount_microusd.max(0), remaining);
         },
         Commands::PluginCall { plugin, capability, input_json, approve, workspace, allow_env } => {
             let registry = initial_plugin_registry()?;
