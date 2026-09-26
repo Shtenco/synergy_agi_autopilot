@@ -20,6 +20,7 @@ members = [
   "crates/autopilot-plugins",
   "crates/autopilot-plugin-runtime",
   "crates/autopilot-automation",
+  "crates/autopilot-automation-runtime",
   "crates/autopilot-secrets",
   "crates/autopilot-control-plane",
   "crates/autopilot-connectors",
