@@ -441,7 +441,13 @@ impl AdaptiveWorkflowSynthesizer {
         let mut steps = Vec::new();
 
         for clause in &clauses {
-            let Some(route) = graph.route_goal(clause, 1).into_iter().next() else { continue };
+            let routes = graph.route_goal(clause, 20);
+            let selected = routes.iter()
+                .find(|route| registry.get(&route.provider)
+                    .is_some_and(|manifest| manifest.input_contract(&route.capability).is_some()))
+                .cloned()
+                .or_else(|| routes.into_iter().next());
+            let Some(route) = selected else { continue };
             let Some(manifest) = registry.get(&route.provider) else { continue };
             let Some(capability) = manifest.capability(&route.capability) else { continue };
             let declared = manifest.input_contract(&route.capability).cloned();
