@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -19,6 +19,7 @@ use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, Fle
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
+use autopilot_plugin_builder::{BuildRequest, CandidateStore, PluginBuilder, SandboxQualifier, SemanticGapDetector};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, DockerRuntime, ExecutionProfile, NativeRuntime, RuntimeAdapter, WslRuntime};
@@ -42,6 +43,26 @@ enum Commands {
     CapabilityPlan {
         #[arg(long)] goal: String,
         #[arg(long, default_value_t = 8)] max_routes: usize,
+    },
+    SemanticGap {
+        #[arg(long)] goal: String,
+    },
+    PluginBuild {
+        #[arg(long)] request: PathBuf,
+        #[arg(long)] quarantine: PathBuf,
+    },
+    PluginQualify {
+        #[arg(long)] id: String,
+        #[arg(long)] quarantine: PathBuf,
+        #[arg(long)] workspace: PathBuf,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long = "allow-program")] allow_program: Vec<String>,
+    },
+    PluginPromote {
+        #[arg(long)] id: String,
+        #[arg(long)] quarantine: PathBuf,
+        #[arg(long)] generated_plugins: PathBuf,
     },
     GraphGoal {
         #[arg(long)] goal: String,
@@ -174,6 +195,23 @@ fn initial_plugin_registry() -> Result<PluginRegistry, String> {
     ] {
         let manifest = parse_manifest_json(raw).map_err(|error| error.to_string())?;
         registry.register(manifest).map_err(|error| error.to_string())?;
+    }
+    if let Ok(root) = std::env::var("AUTOPILOT_GENERATED_PLUGINS") {
+        let root = PathBuf::from(root);
+        if root.exists() {
+            let entries = fs::read_dir(&root)
+                .map_err(|error| format!("cannot read generated plugin directory {}: {error}", root.display()))?;
+            for entry in entries {
+                let entry = entry.map_err(|error| error.to_string())?;
+                let manifest_path = entry.path().join("plugin.json");
+                if !manifest_path.is_file() { continue; }
+                let raw = fs::read_to_string(&manifest_path)
+                    .map_err(|error| format!("cannot read {}: {error}", manifest_path.display()))?;
+                let manifest = parse_manifest_json(&raw)
+                    .map_err(|error| format!("invalid generated plugin {}: {error}", manifest_path.display()))?;
+                registry.register(manifest).map_err(|error| error.to_string())?;
+            }
+        }
     }
     registry.validate_dependencies().map_err(|error| error.to_string())?;
     Ok(registry)
@@ -551,6 +589,39 @@ async fn main() -> Result<(), String> {
                     );
                 }
             }
+        },
+        Commands::SemanticGap { goal } => {
+            let graph = initial_capability_graph()?;
+            match SemanticGapDetector::detect(&graph, &goal) {
+                Some(gap) => println!("{}", serde_json::to_string_pretty(&gap).map_err(|error| error.to_string())?),
+                None => println!("no semantic gap: executable provider already matches this goal"),
+            }
+        },
+        Commands::PluginBuild { request, quarantine } => {
+            let raw = fs::read_to_string(&request)
+                .map_err(|error| format!("cannot read build request {}: {error}", request.display()))?;
+            let build: BuildRequest = serde_json::from_str(&raw)
+                .map_err(|error| format!("invalid build request {}: {error}", request.display()))?;
+            let candidate = PluginBuilder::build(build).map_err(|error| error.to_string())?;
+            let store = CandidateStore::new(quarantine);
+            store.save(&candidate).map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&candidate).map_err(|error| error.to_string())?);
+        },
+        Commands::PluginQualify { id, quarantine, workspace, runtime, docker_image, allow_program } => {
+            let id = Uuid::parse_str(&id).map_err(|error| format!("invalid candidate id: {error}"))?;
+            let runtime = build_runtime(&runtime, &workspace, docker_image.as_deref(), None)?;
+            let allowed = allow_program.into_iter().collect::<BTreeSet<_>>();
+            let qualifier = SandboxQualifier::new(runtime, allowed);
+            let store = CandidateStore::new(quarantine);
+            let candidate = store.qualify(id, &qualifier).await.map_err(|error| error.to_string())?;
+            println!("{}", serde_json::to_string_pretty(&candidate).map_err(|error| error.to_string())?);
+        },
+        Commands::PluginPromote { id, quarantine, generated_plugins } => {
+            let id = Uuid::parse_str(&id).map_err(|error| format!("invalid candidate id: {error}"))?;
+            let store = CandidateStore::new(quarantine);
+            let path = store.promote(id, generated_plugins).map_err(|error| error.to_string())?;
+            println!("promoted_manifest={}", path.display());
+            println!("Set AUTOPILOT_GENERATED_PLUGINS to the generated plugin root to load promoted manifests.");
         },
         Commands::GraphGoal { goal, max_routes, workspace, control_db, allow_env } => {
             let graph = Arc::new(initial_capability_graph()?);
