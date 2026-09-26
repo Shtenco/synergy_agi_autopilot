@@ -7,6 +7,9 @@ license.workspace = true
 [dependencies]
 async-trait.workspace = true
 autopilot-audit = { path = "../../crates/autopilot-audit" }
+autopilot-automation = { path = "../../crates/autopilot-automation" }
+autopilot-automation-runtime = { path = "../../crates/autopilot-automation-runtime" }
+autopilot-control-plane = { path = "../../crates/autopilot-control-plane" }
 autopilot-capability-graph = { path = "../../crates/autopilot-capability-graph" }
 autopilot-core = { path = "../../crates/autopilot-core" }
 autopilot-delivery = { path = "../../crates/autopilot-delivery" }
