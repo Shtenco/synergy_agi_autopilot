@@ -17,6 +17,7 @@ use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
+use autopilot_semantic_planner::{MappingContext, SemanticArgumentMapper};
 use autopilot_verification::{VerificationCheck, VerificationPipeline};
 use autopilot_workspace::WorkspaceManager;
 use serde::{Deserialize, Serialize};
@@ -133,13 +134,44 @@ fn resolve_plugin_refs(value: Value, context: &[Value]) -> Result<Value, String>
     }
 }
 
+fn resolve_semantic_plugin_input(value: Value, context: &[Value]) -> Result<Value, String> {
+    let Value::Object(mut map) = value else { return Ok(value) };
+    let Some(contract) = map.remove("$semantic_contract") else {
+        return Ok(Value::Object(map));
+    };
+    let goal = map.remove("$semantic_goal").and_then(|value| value.as_str().map(str::to_string))
+        .unwrap_or_default();
+    let seed = map.remove("$semantic_hints")
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    let hints = seed.into_iter().collect::<std::collections::BTreeMap<_,_>>();
+    let mapping = SemanticArgumentMapper::map(
+        &contract,
+        &MappingContext {
+            goal,
+            hints,
+            memory: Value::Null,
+            prior_outputs: context.to_vec(),
+        },
+    ).map_err(|error| error.to_string())?;
+    if !mapping.valid() {
+        return Err(format!(
+            "semantic input dry-run failed: unresolved={:?} validation={:?}",
+            mapping.unresolved_required,
+            mapping.validation_errors
+        ));
+    }
+    Ok(mapping.arguments)
+}
+
 #[async_trait]
 impl AgentExecutor for PluginExecutorBridge {
     async fn execute(&self, task: &PlannedTask) -> Result<AgentOutcome, String> {
         let value: Value = serde_json::from_str(&task.objective).map_err(|error| error.to_string())?;
         let input = {
             let context = self.context.lock().map_err(|_| "plugin context lock poisoned".to_string())?;
-            resolve_plugin_refs(value.get("input").cloned().unwrap_or(Value::Null), &context)?
+            let resolved = resolve_plugin_refs(value.get("input").cloned().unwrap_or(Value::Null), &context)?;
+            resolve_semantic_plugin_input(resolved, &context)?
         };
         let call = PluginCall {
             plugin_id: value.get("plugin_id").and_then(Value::as_str).ok_or("plugin_id missing")?.to_string(),
