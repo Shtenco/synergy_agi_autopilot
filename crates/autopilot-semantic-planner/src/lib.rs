@@ -1451,6 +1451,69 @@ mod tests {
     }
 
     #[test]
+    fn typed_dag_connects_offer_message_to_file_content() {
+        let producer = WorkflowStep {
+            id:"proposal".into(),
+            objective:"prepare".into(),
+            plugin_id:"sales".into(),
+            capability:"business.sales.compose_offer".into(),
+            risk:RiskClass::Low,
+            input_contract:serde_json::json!({"type":"object","properties":{}}),
+            output_contract:Some(serde_json::json!({
+                "type":"object",
+                "properties":{
+                    "result":{
+                        "type":"object",
+                        "properties":{"message":{"type":"string","minLength":1}},
+                        "required":["message"]
+                    }
+                },
+                "required":["result"]
+            })),
+            contract_declared:true,
+            mapped_arguments:serde_json::json!({}),
+            unresolved_required:BTreeSet::new(),
+            validation_errors:Vec::new(),
+            depends_on:Vec::new(),
+            requires_approval:false,
+        };
+        let consumer = WorkflowStep {
+            id:"save".into(),
+            objective:"save".into(),
+            plugin_id:"computer".into(),
+            capability:"computer.write_file".into(),
+            risk:RiskClass::Medium,
+            input_contract:serde_json::json!({
+                "type":"object",
+                "properties":{
+                    "path":{"type":"string"},
+                    "content":{"type":"string"}
+                },
+                "required":["path","content"]
+            }),
+            output_contract:None,
+            contract_declared:true,
+            mapped_arguments:serde_json::json!({"path":"offer.txt"}),
+            unresolved_required:["content".to_string()].into_iter().collect(),
+            validation_errors:Vec::new(),
+            depends_on:Vec::new(),
+            requires_approval:false,
+        };
+        let plan=VerifiedDagOptimizer::optimize(WorkflowPlan {
+            goal:"prepare and save".into(),
+            steps:vec![producer,consumer],
+            unresolved_objectives:Vec::new(),
+            typed_edges:Vec::new(),
+            execution_layers:Vec::new(),
+            ready:false,
+        }).unwrap();
+        assert!(plan.ready);
+        assert!(plan.typed_edges.iter().any(|edge| {
+            edge.from_path=="result.message" && edge.to_field=="content"
+        }));
+    }
+
+    #[test]
     fn typed_dag_connects_sales_proposal_to_email_send() {
         let producer = WorkflowStep {
             id:"proposal".into(),
