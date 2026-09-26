@@ -1283,6 +1283,82 @@ mod tests {
     }
 
     #[test]
+    fn ambiguous_typed_sources_do_not_auto_bind() {
+        fn producer(id:&str) -> WorkflowStep {
+            WorkflowStep {
+                id:id.into(),
+                objective:"produce".into(),
+                plugin_id:id.into(),
+                capability:"produce.email".into(),
+                risk:RiskClass::Low,
+                input_contract:serde_json::json!({"type":"object","properties":{}}),
+                output_contract:Some(serde_json::json!({
+                    "type":"object",
+                    "properties":{"email":{"type":"string","format":"email"}},
+                    "required":["email"]
+                })),
+                contract_declared:true,
+                mapped_arguments:serde_json::json!({}),
+                unresolved_required:BTreeSet::new(),
+                validation_errors:Vec::new(),
+                depends_on:Vec::new(),
+                requires_approval:false,
+            }
+        }
+        let consumer=WorkflowStep {
+            id:"send".into(),
+            objective:"send".into(),
+            plugin_id:"email".into(),
+            capability:"email.send".into(),
+            risk:RiskClass::High,
+            input_contract:serde_json::json!({
+                "type":"object",
+                "properties":{"to":{"type":"string","format":"email"}},
+                "required":["to"]
+            }),
+            output_contract:None,
+            contract_declared:true,
+            mapped_arguments:serde_json::json!({}),
+            unresolved_required:["to".to_string()].into_iter().collect(),
+            validation_errors:Vec::new(),
+            depends_on:Vec::new(),
+            requires_approval:true,
+        };
+        let plan=VerifiedDagOptimizer::optimize(WorkflowPlan {
+            goal:"ambiguous".into(),
+            steps:vec![producer("a"),producer("b"),consumer],
+            unresolved_objectives:Vec::new(),
+            typed_edges:Vec::new(),
+            execution_layers:Vec::new(),
+            ready:false,
+        }).unwrap();
+        assert!(!plan.ready);
+        assert!(plan.typed_edges.is_empty());
+        assert!(plan.steps[2].unresolved_required.contains("to"));
+    }
+
+    #[test]
+    fn cyclic_dependencies_are_rejected() {
+        let steps=vec![
+            WorkflowStep {
+                id:"a".into(),objective:"a".into(),plugin_id:"a".into(),capability:"a".into(),
+                risk:RiskClass::Low,input_contract:serde_json::json!({"type":"object"}),
+                output_contract:None,contract_declared:true,mapped_arguments:serde_json::json!({}),
+                unresolved_required:BTreeSet::new(),validation_errors:Vec::new(),
+                depends_on:vec!["b".into()],requires_approval:false,
+            },
+            WorkflowStep {
+                id:"b".into(),objective:"b".into(),plugin_id:"b".into(),capability:"b".into(),
+                risk:RiskClass::Low,input_contract:serde_json::json!({"type":"object"}),
+                output_contract:None,contract_declared:true,mapped_arguments:serde_json::json!({}),
+                unresolved_required:BTreeSet::new(),validation_errors:Vec::new(),
+                depends_on:vec!["a".into()],requires_approval:false,
+            }
+        ];
+        assert!(matches!(topological_layers(&steps),Err(SemanticError::CyclicWorkflow)));
+    }
+
+    #[test]
     fn typed_dag_reorders_late_producer() {
         let consumer = WorkflowStep {
             id:"send".into(),
