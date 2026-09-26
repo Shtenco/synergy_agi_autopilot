@@ -1150,6 +1150,38 @@ mod tests {
     }
 
     #[test]
+    fn typed_gap_ignores_untyped_provider() {
+        let candidate = PluginBuilder::build(BuildRequest {
+            plugin_id: "generated.crm.read".into(),
+            display_name: "CRM reader".into(),
+            capability: "crm.read".into(),
+            source: AdapterSource::OpenApi {
+                base_url: "https://api.example.com".into(),
+                operation_id: "listLeads".into(),
+                document: serde_json::json!({
+                    "paths": {"/leads": {"get": {"operationId": "listLeads"}}}
+                }),
+            },
+            risk: RiskClass::Medium,
+            requires_approval: false,
+            input_contract: None,
+            tags: ["crm".to_string()].into_iter().collect(),
+        }).unwrap();
+
+        let mut untyped = candidate.manifest.clone();
+        untyped.input_contracts.clear();
+        let mut registry = PluginRegistry::default();
+        registry.register(untyped).unwrap();
+        let mut graph = CapabilityGraph::default();
+        graph.attach_plugins(&registry);
+        assert!(SemanticGapDetector::detect_typed(&graph, &registry, "прочитай CRM").is_some());
+
+        registry.upsert(candidate.manifest).unwrap();
+        graph.attach_plugins(&registry);
+        assert!(SemanticGapDetector::detect_typed(&graph, &registry, "прочитай CRM").is_none());
+    }
+
+    #[test]
     fn generates_openapi_candidate_disabled_by_default() {
         let source = AdapterSource::OpenApi {
             base_url: "https://api.example.com".into(),
