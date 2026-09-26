@@ -393,12 +393,25 @@
       "default_branch": "main",
       "visibility": "private",
       "archived": false,
-      "tags": [],
-      "capabilities": [],
-      "transports": [],
+      "tags": [
+        "ai",
+        "apps",
+        "finance",
+        "trading"
+      ],
+      "capabilities": [
+        "app.interface",
+        "finance.analyze",
+        "trading.analyze"
+      ],
+      "transports": [
+        "cli",
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -408,15 +421,31 @@
       "visibility": "public",
       "archived": false,
       "tags": [
-        "ai"
+        "ai",
+        "apps",
+        "blockchain",
+        "finance",
+        "runtime",
+        "science",
+        "trading"
       ],
       "capabilities": [
-        "intelligence.infer"
+        "app.interface",
+        "blockchain.submit",
+        "computer.execute",
+        "intelligence.infer",
+        "memory.search",
+        "trading.analyze",
+        "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "cli",
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -444,16 +473,30 @@
       "visibility": "public",
       "archived": false,
       "tags": [
+        "ai",
+        "apps",
+        "blockchain",
+        "compression",
+        "network",
+        "runtime",
         "science",
         "trading"
       ],
       "capabilities": [
-        "trading.analyze"
+        "app.interface",
+        "compression.encode",
+        "intelligence.infer",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "cli"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -464,16 +507,29 @@
       "archived": false,
       "tags": [
         "ai",
+        "apps",
+        "blockchain",
+        "business",
         "finance",
-        "runtime"
+        "network",
+        "runtime",
+        "trading"
       ],
       "capabilities": [
-        "finance.analyze"
+        "app.interface",
+        "business.operate",
+        "finance.analyze",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -483,16 +539,25 @@
       "visibility": "private",
       "archived": false,
       "tags": [
+        "ai",
+        "apps",
+        "finance",
+        "network",
         "runtime",
         "trading"
       ],
       "capabilities": [
-        "trading.analyze"
+        "app.interface",
+        "finance.analyze",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
       ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -506,12 +571,14 @@
         "compression"
       ],
       "capabilities": [
-        "compression.encode"
+        "compression.encode",
+        "intelligence.infer"
       ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -521,14 +588,31 @@
       "visibility": "private",
       "archived": false,
       "tags": [
+        "ai",
+        "apps",
+        "blockchain",
         "finance",
-        "runtime"
+        "network",
+        "runtime",
+        "science",
+        "trading"
       ],
-      "capabilities": [],
-      "transports": [],
+      "capabilities": [
+        "app.interface",
+        "blockchain.submit",
+        "finance.analyze",
+        "network.transport",
+        "trading.execute"
+      ],
+      "transports": [
+        "cli",
+        "http",
+        "webhook"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -539,15 +623,26 @@
       "archived": false,
       "tags": [
         "ai",
-        "blockchain"
+        "apps",
+        "blockchain",
+        "runtime",
+        "science",
+        "trading"
       ],
       "capabilities": [
-        "blockchain.submit"
+        "app.interface",
+        "blockchain.submit",
+        "intelligence.infer",
+        "trading.analyze",
+        "trading.execute"
       ],
-      "transports": [],
+      "transports": [
+        "cli"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -558,15 +653,28 @@
       "archived": false,
       "tags": [
         "ai",
-        "blockchain"
+        "apps",
+        "blockchain",
+        "business",
+        "compression",
+        "runtime"
       ],
       "capabilities": [
-        "blockchain.submit"
+        "app.interface",
+        "blockchain.submit",
+        "business.operate",
+        "compression.encode",
+        "computer.execute",
+        "intelligence.infer",
+        "memory.search"
       ],
-      "transports": [],
+      "transports": [
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -576,16 +684,19 @@
       "visibility": "public",
       "archived": false,
       "tags": [
-        "ai",
-        "blockchain"
+        "apps",
+        "blockchain",
+        "runtime"
       ],
       "capabilities": [
-        "blockchain.submit"
+        "app.interface",
+        "computer.execute"
       ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -595,13 +706,26 @@
       "visibility": "public",
       "archived": false,
       "tags": [
-        "science"
+        "ai",
+        "apps",
+        "blockchain",
+        "finance",
+        "network",
+        "science",
+        "trading"
       ],
-      "capabilities": [],
+      "capabilities": [
+        "app.interface",
+        "finance.analyze",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
+      ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -610,12 +734,19 @@
       "default_branch": "main",
       "visibility": "private",
       "archived": false,
-      "tags": [],
-      "capabilities": [],
+      "tags": [
+        "ai",
+        "blockchain",
+        "finance"
+      ],
+      "capabilities": [
+        "finance.analyze"
+      ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -625,16 +756,34 @@
       "visibility": "private",
       "archived": false,
       "tags": [
+        "ai",
+        "apps",
+        "blockchain",
+        "business",
+        "compression",
         "finance",
-        "runtime"
+        "network",
+        "runtime",
+        "science",
+        "trading"
       ],
       "capabilities": [
-        "finance.analyze"
+        "app.interface",
+        "blockchain.submit",
+        "business.operate",
+        "compression.encode",
+        "computer.execute",
+        "finance.analyze",
+        "intelligence.infer",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
       ],
       "transports": [],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -643,12 +792,36 @@
       "default_branch": "main",
       "visibility": "private",
       "archived": false,
-      "tags": [],
-      "capabilities": [],
-      "transports": [],
+      "tags": [
+        "ai",
+        "apps",
+        "blockchain",
+        "business",
+        "finance",
+        "network",
+        "runtime",
+        "science",
+        "trading"
+      ],
+      "capabilities": [
+        "app.interface",
+        "blockchain.submit",
+        "business.operate",
+        "computer.execute",
+        "finance.analyze",
+        "intelligence.infer",
+        "network.transport",
+        "trading.analyze",
+        "trading.execute"
+      ],
+      "transports": [
+        "cli",
+        "http"
+      ],
       "plugin_ids": [],
       "evidence": [
-        "github-metadata:name"
+        "github-metadata:name",
+        "readme:README.md"
       ]
     },
     {
@@ -1413,5 +1586,5 @@
       ]
     }
   ],
-  "readme_enriched_count": 13
+  "readme_enriched_count": 27
 }
