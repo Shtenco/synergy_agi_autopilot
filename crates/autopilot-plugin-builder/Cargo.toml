@@ -1,0 +1,17 @@
+[package]
+name = "autopilot-plugin-builder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+autopilot-capability-graph = { path = "../autopilot-capability-graph" }
+autopilot-domain = { path = "../autopilot-domain" }
+autopilot-plugins = { path = "../autopilot-plugins" }
+autopilot-runtime = { path = "../autopilot-runtime" }
+async-trait.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
