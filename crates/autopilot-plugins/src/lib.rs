@@ -43,6 +43,27 @@ pub struct PluginEndpoint {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PluginAdapter {
+    OpenApi {
+        base_url: String,
+        operation_id: String,
+        document: serde_json::Value,
+    },
+    McpStdio {
+        command: String,
+        #[serde(default)]
+        args: Vec<String>,
+        tool: String,
+    },
+    Cli {
+        program: String,
+        #[serde(default)]
+        args: Vec<String>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginCapability {
     pub name: String,
     pub risk: RiskClass,
@@ -69,6 +90,8 @@ pub struct PluginManifest {
     pub requires: BTreeSet<String>,
     #[serde(default)]
     pub enabled_by_default: bool,
+    #[serde(default)]
+    pub adapter: Option<PluginAdapter>,
 }
 
 impl PluginManifest {
@@ -189,6 +212,7 @@ mod tests {
             tags: BTreeSet::new(),
             requires: BTreeSet::new(),
             enabled_by_default: false,
+            adapter: None,
         }
     }
 
