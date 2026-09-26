@@ -575,6 +575,110 @@ impl CandidateStore {
     }
 }
 
+#[async_trait]
+pub trait BuildDiscovery: Send + Sync {
+    async fn discover(&self, plan: &SelfBuildPlan) -> Result<Vec<BuildRequest>, BuilderError>;
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct StaticBuildDiscovery {
+    pub requests: Vec<BuildRequest>,
+}
+
+#[async_trait]
+impl BuildDiscovery for StaticBuildDiscovery {
+    async fn discover(&self, plan: &SelfBuildPlan) -> Result<Vec<BuildRequest>, BuilderError> {
+        Ok(self.requests.iter()
+            .filter(|request| request.capability == plan.gap.suggested_capability)
+            .cloned()
+            .collect())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SelfBuildPolicy {
+    pub auto_promote: bool,
+    pub max_auto_promote_risk: RiskClass,
+}
+
+impl Default for SelfBuildPolicy {
+    fn default() -> Self {
+        Self { auto_promote: true, max_auto_promote_risk: RiskClass::Medium }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum SelfBuildOutcome {
+    ExistingProvider,
+    DiscoveryEmpty { plan: SelfBuildPlan },
+    CandidateRejected { candidate: PluginCandidate },
+    QualifiedAwaitingPromotion { candidate: PluginCandidate },
+    Promoted { candidate: PluginCandidate, manifest_path: PathBuf },
+}
+
+pub struct SelfBuildCoordinator<Q: CandidateQualifier, D: BuildDiscovery> {
+    store: CandidateStore,
+    qualifier: Q,
+    discovery: D,
+    policy: SelfBuildPolicy,
+    generated_plugins_root: PathBuf,
+}
+
+impl<Q: CandidateQualifier, D: BuildDiscovery> SelfBuildCoordinator<Q, D> {
+    pub fn new(
+        store: CandidateStore,
+        qualifier: Q,
+        discovery: D,
+        policy: SelfBuildPolicy,
+        generated_plugins_root: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            store,
+            qualifier,
+            discovery,
+            policy,
+            generated_plugins_root: generated_plugins_root.into(),
+        }
+    }
+
+    pub async fn ensure_for_goal(
+        &self,
+        graph: &CapabilityGraph,
+        goal: &str,
+    ) -> Result<SelfBuildOutcome, BuilderError> {
+        let Some(plan) = SemanticGapDetector::self_build_plan(graph, goal) else {
+            return Ok(SelfBuildOutcome::ExistingProvider);
+        };
+        let requests = self.discovery.discover(&plan).await?;
+        let Some(request) = requests.into_iter().next() else {
+            return Ok(SelfBuildOutcome::DiscoveryEmpty { plan });
+        };
+        let candidate = PluginBuilder::build(request)?;
+        let id = candidate.candidate_id;
+        self.store.save(&candidate)?;
+        let candidate = self.store.qualify(id, &self.qualifier).await?;
+        if candidate.state != CandidateState::Qualified {
+            return Ok(SelfBuildOutcome::CandidateRejected { candidate });
+        }
+
+        let capability = candidate.manifest.capabilities.first()
+            .ok_or_else(|| BuilderError::Invalid("generated candidate exposes no capability".into()))?;
+        let auto_promotable = self.policy.auto_promote
+            && capability.risk <= self.policy.max_auto_promote_risk
+            && !capability.requires_approval;
+
+        if !auto_promotable {
+            return Ok(SelfBuildOutcome::QualifiedAwaitingPromotion { candidate });
+        }
+
+        let manifest_path = self.store.promote(id, &self.generated_plugins_root)?;
+        let candidate = self.store.load(id)?;
+        Ok(SelfBuildOutcome::Promoted { candidate, manifest_path })
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
