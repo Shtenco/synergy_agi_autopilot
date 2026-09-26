@@ -6,15 +6,89 @@
   "kind": "worker",
   "provider": "Shtenco/synergy_ai_blockchain#feat/p7-node-commander-agent-fabric",
   "capabilities": [
-    {"name":"worker.register","risk":"Medium","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"worker.schedule","risk":"Medium","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"worker.lease","risk":"Medium","requires_approval":false,"mapped_core_capabilities":[]},
-    {"name":"worker.remote.delegate","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess"]}
+    {
+      "name": "worker.register",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "worker.schedule",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "worker.lease",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "worker.remote.delegate",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": [
+        "NetworkAccess"
+      ]
+    }
   ],
   "endpoints": [
-    {"transport":"rust_adapter","address":"node-runtime/crates/agent-fabric"}
+    {
+      "transport": "rust_adapter",
+      "address": "node-runtime/crates/agent-fabric"
+    }
   ],
-  "tags": ["workers","swarm","scheduler","distributed"],
+  "tags": [
+    "workers",
+    "swarm",
+    "scheduler",
+    "distributed"
+  ],
   "requires": [],
-  "enabled_by_default": false
+  "enabled_by_default": false,
+  "input_contracts": {
+    "worker.schedule": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "default": []
+        },
+        "task": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "additionalProperties": false
+    },
+    "worker.lease": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "default": []
+        },
+        "task": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "additionalProperties": false
+    }
+  }
 }
