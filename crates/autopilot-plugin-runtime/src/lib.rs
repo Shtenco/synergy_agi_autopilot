@@ -730,8 +730,24 @@ impl PluginExecutor {
         if result.get("isError").and_then(Value::as_bool).unwrap_or(false) {
             return Err(PluginRuntimeError::Mcp(result.to_string()));
         }
-        Ok(result)
+        Ok(normalize_mcp_tool_result(result))
     }
+}
+
+fn normalize_mcp_tool_result(result: Value) -> Value {
+    if let Some(value) = result.get("structuredContent") {
+        return value.clone();
+    }
+    if let Some(content) = result.get("content").and_then(Value::as_array) {
+        if content.len() == 1 {
+            if let Some(text) = content[0].get("text").and_then(Value::as_str) {
+                if let Ok(value) = serde_json::from_str::<Value>(text) {
+                    return value;
+                }
+            }
+        }
+    }
+    result
 }
 
 struct OpenApiArgumentBuckets {
@@ -860,6 +876,26 @@ mod tests {
             registry.register(parse_manifest_json(raw).unwrap()).unwrap();
         }
         registry
+    }
+
+    #[test]
+    fn normalizes_mcp_json_text_result() {
+        let value = normalize_mcp_tool_result(serde_json::json!({
+            "content":[{"type":"text","text":"{\"path\":\"a.txt\",\"size\":3,\"text\":\"abc\"}"}],
+            "isError":false
+        }));
+        assert_eq!(value["path"], "a.txt");
+        assert_eq!(value["size"], 3);
+    }
+
+    #[test]
+    fn structured_content_has_priority() {
+        let value = normalize_mcp_tool_result(serde_json::json!({
+            "structuredContent":{"ok":true},
+            "content":[{"type":"text","text":"ignored"}],
+            "isError":false
+        }));
+        assert_eq!(value, serde_json::json!({"ok":true}));
     }
 
     #[tokio::test]
