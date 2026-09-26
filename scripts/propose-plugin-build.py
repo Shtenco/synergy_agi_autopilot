@@ -125,6 +125,7 @@ def main()->None:
                     "input_contract":surface.get("input_schema") or {
                         "type":"object","properties":{},"additionalProperties":True
                     },
+                    "output_contract":surface.get("output_schema"),
                     "tags":["generated","cli",*(surface.get("tags") or [])],
                 }
         elif kind=="cli":
