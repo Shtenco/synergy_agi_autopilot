@@ -24,6 +24,22 @@ pub struct SemanticGap {
 
 pub struct SemanticGapDetector;
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiscoveryStrategy {
+    OpenApiDocument,
+    McpConfiguration,
+    CliEntrypoint,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SelfBuildPlan {
+    pub gap: SemanticGap,
+    pub strategies: Vec<DiscoveryStrategy>,
+    pub qualification_gates: Vec<String>,
+    pub auto_execution_allowed: bool,
+}
+
 impl SemanticGapDetector {
     pub fn detect(graph: &CapabilityGraph, goal: &str) -> Option<SemanticGap> {
         if !graph.route_goal(goal, 1).is_empty() {
@@ -35,6 +51,27 @@ impl SemanticGapDetector {
             suggested_capability: infer_capability(&terms),
             terms,
             reason: "no executable provider matched the semantic goal".into(),
+        })
+    }
+
+    pub fn self_build_plan(graph: &CapabilityGraph, goal: &str) -> Option<SelfBuildPlan> {
+        let gap = Self::detect(graph, goal)?;
+        Some(SelfBuildPlan {
+            gap,
+            strategies: vec![
+                DiscoveryStrategy::OpenApiDocument,
+                DiscoveryStrategy::McpConfiguration,
+                DiscoveryStrategy::CliEntrypoint,
+            ],
+            qualification_gates: vec![
+                "static source discovery without code execution".into(),
+                "synergy.plugin.v1 manifest validation".into(),
+                "high-risk approval requirement".into(),
+                "sandbox probe in read-only isolation".into(),
+                "runtime executable allowlist for MCP/CLI".into(),
+                "promotion from quarantine only after all checks pass".into(),
+            ],
+            auto_execution_allowed: false,
         })
     }
 }
