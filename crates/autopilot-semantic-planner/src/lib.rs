@@ -631,6 +631,46 @@ fn schema_assignable(producer: &Value, consumer: &Value, depth: usize) -> bool {
     let producer = resolve_local_schema_refs(producer);
     let consumer = resolve_local_schema_refs(consumer);
 
+    if let Some(variants) = consumer.get("allOf").and_then(Value::as_array) {
+        return variants.iter().all(|variant| schema_assignable(&producer, variant, depth + 1));
+    }
+    if let Some(variants) = consumer.get("anyOf").and_then(Value::as_array) {
+        return variants.iter().any(|variant| schema_assignable(&producer, variant, depth + 1));
+    }
+    if let Some(variants) = consumer.get("oneOf").and_then(Value::as_array) {
+        return variants.iter().filter(|variant| schema_assignable(&producer, variant, depth + 1)).count() == 1;
+    }
+    if let Some(variants) = producer.get("anyOf").and_then(Value::as_array)
+        .or_else(|| producer.get("oneOf").and_then(Value::as_array))
+    {
+        return !variants.is_empty()
+            && variants.iter().all(|variant| schema_assignable(variant, &consumer, depth + 1));
+    }
+    if let Some(variants) = producer.get("allOf").and_then(Value::as_array) {
+        return !variants.is_empty()
+            && variants.iter().all(|variant| schema_assignable(variant, &consumer, depth + 1));
+    }
+
+    if let Some(expected) = consumer.get("const") {
+        if let Some(actual) = producer.get("const") {
+            return actual == expected;
+        }
+        if let Some(values) = producer.get("enum").and_then(Value::as_array) {
+            return !values.is_empty() && values.iter().all(|value| value == expected);
+        }
+        return false;
+    }
+    if let Some(allowed) = consumer.get("enum").and_then(Value::as_array) {
+        if let Some(actual) = producer.get("const") {
+            return allowed.iter().any(|value| value == actual);
+        }
+        if let Some(values) = producer.get("enum").and_then(Value::as_array) {
+            return !values.is_empty()
+                && values.iter().all(|value| allowed.iter().any(|allowed| allowed == value));
+        }
+        return false;
+    }
+
     if let Some(constant) = producer.get("const") {
         return JsonContractValidator::validate(&consumer, constant).is_empty();
     }
@@ -1476,6 +1516,30 @@ mod tests {
         assert_eq!(plan.execution_layers,vec![vec!["proposal".to_string()],vec!["send".to_string()]]);
         assert!(plan.typed_edges.iter().any(|edge| edge.from_path=="recipient_email" && edge.to_field=="to"));
         assert!(plan.typed_edges.iter().any(|edge| edge.from_path=="message" && edge.to_field=="body"));
+    }
+
+    #[test]
+    fn typed_matcher_rejects_generic_producer_for_enum_consumer() {
+        assert!(TypedSchemaMatcher::compatible(
+            &serde_json::json!({"type":"string"}),
+            &serde_json::json!({"type":"string","enum":["approved","pending"]})
+        ).is_none());
+        assert!(TypedSchemaMatcher::compatible(
+            &serde_json::json!({"type":"string","enum":["approved"]}),
+            &serde_json::json!({"type":"string","enum":["approved","pending"]})
+        ).is_some());
+    }
+
+    #[test]
+    fn typed_matcher_honors_consumer_combinators() {
+        let producer=serde_json::json!({"type":"integer","minimum":1,"maximum":10});
+        let consumer=serde_json::json!({
+            "anyOf":[
+                {"type":"string"},
+                {"type":"number","minimum":0,"maximum":100}
+            ]
+        });
+        assert!(TypedSchemaMatcher::compatible(&producer,&consumer).is_some());
     }
 
     #[test]
