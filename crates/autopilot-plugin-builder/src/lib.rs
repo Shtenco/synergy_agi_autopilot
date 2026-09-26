@@ -1145,9 +1145,7 @@ impl BuildDiscovery for FilesystemCliDescriptorDiscovery {
             for command in commands {
                 let Some(program) = command.get("program").and_then(Value::as_str) else { continue };
                 let Some(capability) = command.get("capability").and_then(Value::as_str) else { continue };
-                if capability != plan.gap.suggested_capability
-                    && !capability.starts_with(plan.gap.suggested_capability.split('.').next().unwrap_or(""))
-                {
+                if capability != plan.gap.suggested_capability {
                     continue;
                 }
                 let args = command.get("args").and_then(Value::as_array)
