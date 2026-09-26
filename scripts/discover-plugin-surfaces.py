@@ -154,6 +154,7 @@ def discover_cli_descriptor(path: Path) -> list[dict[str, Any]]:
             "args":args,
             "capability":capability,
             "input_schema":input_schema,
+            "output_schema":command.get("output_schema") if isinstance(command.get("output_schema"), dict) else None,
             "risk":str(command.get("risk") or "Medium"),
             "requires_approval":bool(command.get("requires_approval", False)),
             "tags":[str(v) for v in (command.get("tags") or []) if isinstance(v, str)],
