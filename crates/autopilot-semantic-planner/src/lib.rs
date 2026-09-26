@@ -47,6 +47,8 @@ pub enum SemanticError {
     EmptyWorkflow,
     #[error("workflow graph is cyclic")]
     CyclicWorkflow,
+    #[error("invalid cognitive plan: {0}")]
+    InvalidCognitivePlan(String),
 }
 
 fn resolve_local_schema_refs(schema: &Value) -> Value {
@@ -809,6 +811,95 @@ pub struct WorkflowPlan {
     pub ready: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CognitiveStepProposal {
+    pub id: String,
+    pub objective: String,
+    pub plugin_id: String,
+    pub capability: String,
+    #[serde(default)]
+    pub hints: BTreeMap<String, Value>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CognitivePlanProposal {
+    pub goal: String,
+    pub steps: Vec<CognitiveStepProposal>,
+}
+
+pub struct VerifiedCognitivePlanner;
+
+impl VerifiedCognitivePlanner {
+    pub fn verify(
+        proposal: &CognitivePlanProposal,
+        registry: &PluginRegistry,
+        context: &MappingContext,
+    ) -> Result<WorkflowPlan, SemanticError> {
+        if proposal.steps.is_empty() {
+            return Err(SemanticError::InvalidCognitivePlan("proposal has no steps".into()));
+        }
+
+        let mut seen = BTreeSet::new();
+        let mut steps = Vec::new();
+        for proposed in &proposal.steps {
+            if proposed.id.trim().is_empty() || !seen.insert(proposed.id.clone()) {
+                return Err(SemanticError::InvalidCognitivePlan(format!(
+                    "duplicate or empty step id: {}",
+                    proposed.id
+                )));
+            }
+            let manifest = registry.get(&proposed.plugin_id)
+                .ok_or_else(|| SemanticError::InvalidCognitivePlan(format!(
+                    "unknown plugin in proposal: {}",
+                    proposed.plugin_id
+                )))?;
+            let capability = manifest.capability(&proposed.capability)
+                .ok_or_else(|| SemanticError::InvalidCognitivePlan(format!(
+                    "plugin {} does not expose {}",
+                    proposed.plugin_id, proposed.capability
+                )))?;
+            let input_contract = manifest.input_contract(&proposed.capability)
+                .cloned()
+                .ok_or_else(|| SemanticError::InvalidCognitivePlan(format!(
+                    "capability {}/{} has no typed input contract",
+                    proposed.plugin_id, proposed.capability
+                )))?;
+
+            let mut local = context.clone();
+            local.goal = proposed.objective.clone();
+            for (key, value) in &proposed.hints {
+                local.hints.insert(key.clone(), value.clone());
+            }
+            let mapped = SemanticArgumentMapper::map(&input_contract, &local)?;
+
+            steps.push(WorkflowStep {
+                id: proposed.id.clone(),
+                objective: proposed.objective.clone(),
+                plugin_id: proposed.plugin_id.clone(),
+                capability: proposed.capability.clone(),
+                risk: capability.risk,
+                input_contract,
+                output_contract: manifest.output_contract(&proposed.capability).cloned(),
+                contract_declared: true,
+                mapped_arguments: mapped.arguments,
+                unresolved_required: mapped.unresolved_required,
+                validation_errors: mapped.validation_errors,
+                depends_on: Vec::new(),
+                requires_approval: capability.requires_approval,
+            });
+        }
+
+        VerifiedDagOptimizer::optimize(WorkflowPlan {
+            goal: proposal.goal.clone(),
+            steps,
+            unresolved_objectives: Vec::new(),
+            typed_edges: Vec::new(),
+            execution_layers: Vec::new(),
+            ready: false,
+        })
+    }
+}
+
 pub struct AdaptiveWorkflowSynthesizer;
 
 impl AdaptiveWorkflowSynthesizer {
@@ -1066,6 +1157,79 @@ mod tests {
         };
         assert!(step.ready());
         assert!(step.requires_runtime_mapping());
+    }
+
+    #[test]
+    fn cognitive_plan_cannot_override_registry_authority() {
+        let mut registry = PluginRegistry::default();
+        let manifest = PluginManifest {
+            schema: PLUGIN_SCHEMA_V1.into(),
+            id:"mailer".into(),
+            name:"mailer".into(),
+            version:"1.0.0".into(),
+            kind:PluginKind::Business,
+            provider:"test".into(),
+            capabilities:vec![PluginCapability {
+                name:"email.send".into(),
+                risk:RiskClass::High,
+                requires_approval:true,
+                mapped_core_capabilities:BTreeSet::new(),
+            }],
+            endpoints:vec![],
+            tags:BTreeSet::new(),
+            requires:BTreeSet::new(),
+            enabled_by_default:false,
+            adapter:None,
+            input_contracts:BTreeMap::from([(
+                "email.send".into(),
+                serde_json::json!({
+                    "type":"object",
+                    "properties":{
+                        "to":{"type":"string","format":"email"},
+                        "body":{"type":"string"}
+                    },
+                    "required":["to","body"]
+                })
+            )]),
+            output_contracts:BTreeMap::new(),
+        };
+        registry.register(manifest).unwrap();
+
+        let proposal=CognitivePlanProposal {
+            goal:"send".into(),
+            steps:vec![CognitiveStepProposal {
+                id:"send".into(),
+                objective:"отправь на client@example.com сообщение: test".into(),
+                plugin_id:"mailer".into(),
+                capability:"email.send".into(),
+                hints:BTreeMap::new(),
+            }],
+        };
+        let plan=VerifiedCognitivePlanner::verify(
+            &proposal,&registry,&MappingContext::default()
+        ).unwrap();
+        assert_eq!(plan.steps[0].risk,RiskClass::High);
+        assert!(plan.steps[0].requires_approval);
+    }
+
+    #[test]
+    fn cognitive_plan_rejects_unknown_plugin() {
+        let proposal=CognitivePlanProposal {
+            goal:"x".into(),
+            steps:vec![CognitiveStepProposal {
+                id:"x".into(),
+                objective:"x".into(),
+                plugin_id:"invented".into(),
+                capability:"invented.run".into(),
+                hints:BTreeMap::new(),
+            }],
+        };
+        assert!(matches!(
+            VerifiedCognitivePlanner::verify(
+                &proposal,&PluginRegistry::default(),&MappingContext::default()
+            ),
+            Err(SemanticError::InvalidCognitivePlan(_))
+        ));
     }
 
     #[test]
