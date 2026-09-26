@@ -146,7 +146,7 @@ pub enum BuilderError {
     Json(String),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BuildRequest {
     pub plugin_id: String,
     pub display_name: String,
