@@ -385,6 +385,23 @@ mod tests {
     }
 
     #[test]
+    fn loads_promoted_manifests_from_directory() {
+        let root = std::env::temp_dir().join(format!("autopilot-plugin-registry-{}", uuid::Uuid::new_v4()));
+        let plugin_dir = root.join("generated.test");
+        fs::create_dir_all(&plugin_dir).unwrap();
+        let item = manifest("generated.test", "custom.read");
+        fs::write(
+            plugin_dir.join("plugin.json"),
+            serde_json::to_string_pretty(&item).unwrap(),
+        ).unwrap();
+
+        let mut registry = PluginRegistry::default();
+        assert_eq!(registry.load_dir(&root).unwrap(), 1);
+        assert!(registry.get("generated.test").is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn dependency_validation_fails_closed() {
         let mut registry = PluginRegistry::default();
         let mut item = manifest("remote-computer", "computer.remote.run");
