@@ -130,7 +130,7 @@ impl AutomationRuntime {
         let event = AutomationEvent {
             topic: lease.topic.clone(),
             payload,
-            occurred_at: lease.occurred_at,
+            occurred_at: lease.occurred_at.clone(),
         };
         let specs = self.control.matching_event_automations(&event)?;
         specs.iter().map(|spec| self.dispatch(spec)).collect()
