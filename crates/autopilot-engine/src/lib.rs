@@ -17,7 +17,7 @@ use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
-use autopilot_semantic_planner::{MappingContext, SemanticArgumentMapper};
+use autopilot_semantic_planner::{JsonContractValidator, MappingContext, SemanticArgumentMapper};
 use autopilot_verification::{VerificationCheck, VerificationPipeline};
 use autopilot_workspace::WorkspaceManager;
 use serde::{Deserialize, Serialize};
@@ -144,10 +144,49 @@ fn resolve_semantic_plugin_input(value: Value, context: &[Value]) -> Result<Valu
     let seed = map.remove("$semantic_hints")
         .and_then(|value| value.as_object().cloned())
         .unwrap_or_default();
+    let bindings = map.remove("$typed_bindings")
+        .and_then(|value| value.as_array().cloned())
+        .unwrap_or_default();
     let control = map.into_iter()
         .filter(|(key, _)| key.starts_with('_'))
         .collect::<serde_json::Map<_,_>>();
-    let hints = seed.into_iter().collect::<std::collections::BTreeMap<_,_>>();
+
+    let mut hints = seed.into_iter().collect::<std::collections::BTreeMap<_,_>>();
+    for binding in bindings {
+        let from_step = binding.get("from_step").and_then(Value::as_str)
+            .ok_or_else(|| "typed binding missing from_step".to_string())?;
+        let from_path = binding.get("from_path").and_then(Value::as_str)
+            .ok_or_else(|| "typed binding missing from_path".to_string())?;
+        let to_field = binding.get("to_field").and_then(Value::as_str)
+            .ok_or_else(|| "typed binding missing to_field".to_string())?;
+        let index = from_step.strip_prefix("step-")
+            .and_then(|value| value.parse::<usize>().ok())
+            .and_then(|value| value.checked_sub(1))
+            .ok_or_else(|| format!("invalid typed binding source step: {from_step}"))?;
+        let source = context.get(index)
+            .and_then(|value| value.get("output"))
+            .ok_or_else(|| format!("typed binding source output is unavailable: {from_step}"))?;
+        let mut current = source;
+        for segment in from_path.split('.') {
+            current = current.get(segment)
+                .ok_or_else(|| format!("typed binding path not found: {from_step}.{from_path}"))?;
+        }
+        let pointer = format!(
+            "/properties/{}",
+            to_field.replace('~', "~0").replace('/', "~1")
+        );
+        let target_schema = contract.pointer(&pointer)
+            .ok_or_else(|| format!("typed binding target is not declared: {to_field}"))?;
+        let errors = JsonContractValidator::validate(target_schema, current);
+        if !errors.is_empty() {
+            return Err(format!(
+                "typed binding runtime validation failed for {from_step}.{from_path} -> {to_field}: {}",
+                errors.join("; ")
+            ));
+        }
+        hints.insert(to_field.to_string(), current.clone());
+    }
+
     let mapping = SemanticArgumentMapper::map(
         &contract,
         &MappingContext {
