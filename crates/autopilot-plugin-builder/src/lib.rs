@@ -144,25 +144,38 @@ fn tokenize(goal: &str) -> BTreeSet<String> {
 
 fn infer_capability(terms: &BTreeSet<String>) -> String {
     let joined = terms.iter().cloned().collect::<Vec<_>>().join(" ");
-    for (needle, capability) in [
-        ("email", "email.read"),
-        ("почт", "email.read"),
-        ("calendar", "calendar.read"),
-        ("календар", "calendar.read"),
-        ("crm", "crm.read"),
-        ("database", "database.query"),
-        ("баз", "database.query"),
-        ("browser", "browser.snapshot"),
-        ("сайт", "browser.snapshot"),
-        ("file", "computer.read_file"),
-        ("файл", "computer.read_file"),
-        ("memory", "memory.search"),
-        ("памят", "memory.search"),
-    ] {
-        if joined.contains(needle) {
-            return capability.into();
-        }
+    let has = |needles: &[&str]| needles.iter().any(|needle| joined.contains(needle));
+    let write = has(&["send","отправ","create","созда","update","обнов","write","запиш","publish","опублик"]);
+    let update = has(&["update","обнов"]);
+    let create = has(&["create","созда"]);
+    let send = has(&["send","отправ"]);
+
+    if has(&["email","почт"]) {
+        return if send || write { "email.send" } else { "email.read" }.into();
     }
+    if has(&["calendar","календар"]) {
+        if update { return "calendar.event.update".into(); }
+        if create || write { return "calendar.event.create".into(); }
+        return "calendar.read".into();
+    }
+    if has(&["crm"]) {
+        if update { return "crm.record.update".into(); }
+        if create || write { return "crm.record.create".into(); }
+        return "crm.read".into();
+    }
+    if has(&["browser","сайт","web"]) {
+        if has(&["click","клик","наж"]) { return "browser.click".into(); }
+        if has(&["fill","заполн"]) { return "browser.fill".into(); }
+        if has(&["navigate","открой","перейд","open"]) { return "browser.navigate".into(); }
+        if has(&["screenshot","snapshot","скрин","снимок"]) { return "browser.snapshot".into(); }
+        return "browser.snapshot".into();
+    }
+    if has(&["file","файл"]) {
+        return if write { "computer.write_file" } else { "computer.read_file" }.into();
+    }
+    if has(&["database","баз"]) { return "database.query".into(); }
+    if has(&["memory","памят"]) { return if write { "memory.upsert" } else { "memory.search" }.into(); }
+
     let normalized = terms.iter().next().cloned().unwrap_or_else(|| "generic".into()).replace('-', "_");
     format!("custom.{normalized}.read")
 }
