@@ -423,7 +423,7 @@ fn context_aliases(field: &str) -> &'static [&'static str] {
     match normalize_field(field).as_str() {
         "to" | "recipient" => &["email", "email_address", "recipient_email", "recipient"],
         "email" | "email_address" | "recipient_email" => &["to", "recipient"],
-        "body" => &["message", "text", "content", "proposal"],
+        "body" | "content" => &["message", "text", "body", "content", "proposal"],
         "message" => &["body", "text", "content", "proposal"],
         "subject" => &["title"],
         "title" => &["subject", "name"],
