@@ -323,6 +323,43 @@ mod tests {
     }
 
     #[test]
+    fn generated_adapter_must_be_disabled_by_default() {
+        let mut item = manifest("generated", "custom.read");
+        item.kind = PluginKind::Cli;
+        item.enabled_by_default = true;
+        item.adapter = Some(PluginAdapter::Cli {
+            program: "safe-tool".into(),
+            args: vec!["--version".into()],
+        });
+        assert!(matches!(item.validate(), Err(PluginError::InvalidManifest(_))));
+    }
+
+    #[test]
+    fn generated_cli_rejects_shell_metacharacters() {
+        let mut item = manifest("generated", "custom.read");
+        item.kind = PluginKind::Cli;
+        item.adapter = Some(PluginAdapter::Cli {
+            program: "tool;evil".into(),
+            args: vec![],
+        });
+        assert!(matches!(item.validate(), Err(PluginError::InvalidManifest(_))));
+    }
+
+    #[test]
+    fn generated_openapi_requires_https_or_loopback() {
+        let mut item = manifest("generated", "custom.read");
+        item.kind = PluginKind::OpenApi;
+        item.adapter = Some(PluginAdapter::OpenApi {
+            base_url: "http://example.com".into(),
+            operation_id: "status".into(),
+            document: serde_json::json!({
+                "paths": {"/status": {"get": {"operationId": "status"}}}
+            }),
+        });
+        assert!(matches!(item.validate(), Err(PluginError::InvalidManifest(_))));
+    }
+
+    #[test]
     fn dependency_validation_fails_closed() {
         let mut registry = PluginRegistry::default();
         let mut item = manifest("remote-computer", "computer.remote.run");
