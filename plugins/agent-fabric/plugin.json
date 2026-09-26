@@ -1,0 +1,166 @@
+{
+  "schema": "synergy.plugin.v1",
+  "id": "workers.agent.fabric",
+  "name": "SYNERGY Agent Fabric",
+  "version": "1.0.0",
+  "kind": "worker",
+  "provider": "Shtenco/synergy_ai_blockchain#feat/p7-node-commander-agent-fabric",
+  "capabilities": [
+    {
+      "name": "worker.register",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "worker.schedule",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "worker.lease",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "worker.remote.delegate",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": [
+        "NetworkAccess"
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "transport": "rust_adapter",
+      "address": "node-runtime/crates/agent-fabric"
+    }
+  ],
+  "tags": [
+    "workers",
+    "swarm",
+    "scheduler",
+    "distributed"
+  ],
+  "requires": [],
+  "enabled_by_default": false,
+  "input_contracts": {
+    "worker.schedule": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "default": []
+        },
+        "task": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "additionalProperties": false
+    },
+    "worker.lease": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "default": []
+        },
+        "task": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "output_contracts": {
+    "worker.schedule": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string"
+        },
+        "epoch": {
+          "type": "integer"
+        },
+        "expires_epoch": {
+          "type": "integer"
+        },
+        "lease_root": {
+          "type": "array",
+          "minItems": 32,
+          "maxItems": 32,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      },
+      "required": [
+        "task_id",
+        "agent_id",
+        "epoch",
+        "expires_epoch",
+        "lease_root"
+      ],
+      "additionalProperties": false
+    },
+    "worker.lease": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string"
+        },
+        "epoch": {
+          "type": "integer"
+        },
+        "expires_epoch": {
+          "type": "integer"
+        },
+        "lease_root": {
+          "type": "array",
+          "minItems": 32,
+          "maxItems": 32,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      },
+      "required": [
+        "task_id",
+        "agent_id",
+        "epoch",
+        "expires_epoch",
+        "lease_root"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

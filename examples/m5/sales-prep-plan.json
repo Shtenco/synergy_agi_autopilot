@@ -1,0 +1,128 @@
+[
+  {
+    "role": "Architect",
+    "plugin_id": "intelligence.nexus",
+    "capability": "memory.search",
+    "input": {
+      "query": "target customer profile, prior outreach, offers, objections",
+      "namespaces": [
+        "sales",
+        "crm",
+        "company"
+      ],
+      "limit": 10
+    },
+    "approved": false,
+    "risk": "Low"
+  },
+  {
+    "role": "Director",
+    "plugin_id": "business.auto-company",
+    "capability": "company.opportunity.ingest",
+    "input": {
+      "title": "M5 sample lead",
+      "source": "autopilot-e2e",
+      "description": "Prepare a qualified lead and sales package through the universal capability graph.",
+      "expected_revenue_usd": 0,
+      "estimated_cost_usd": 0,
+      "probability": 0,
+      "hours": 0.5,
+      "evidence": [
+        "M5 universal execution fabric"
+      ],
+      "tags": [
+        "m5",
+        "e2e",
+        "sales"
+      ]
+    },
+    "approved": false,
+    "risk": "Low"
+  },
+  {
+    "role": "Coder",
+    "plugin_id": "business.capability.runtime",
+    "capability": "business.sales.plan",
+    "input": {
+      "message": "Interested in reducing manual work across sales, content, CRM and operations. Wants a measurable demo and implementation plan.",
+      "current_score": 35
+    },
+    "approved": false,
+    "risk": "Low"
+  },
+  {
+    "role": "Reviewer",
+    "plugin_id": "business.capability.runtime",
+    "capability": "business.smm.plan",
+    "input": {
+      "product": "SYNERGY AI AUTOPILOT",
+      "audience": "business owners and teams with fragmented manual workflows",
+      "objective": "qualified sales conversations",
+      "days": 7,
+      "platforms": [
+        "telegram",
+        "vk",
+        "instagram"
+      ]
+    },
+    "approved": false,
+    "risk": "Low"
+  },
+  {
+    "role": "Tester",
+    "plugin_id": "computer.local.commander",
+    "capability": "computer.write_file",
+    "input": {
+      "path": "var/m5/e2e-proof.txt",
+      "content": "SYNERGY AI AUTOPILOT M5 reached the Local Commander capability boundary.\n",
+      "mode": "rewrite"
+    },
+    "approved": false,
+    "risk": "Medium"
+  },
+  {
+    "role": "Release",
+    "plugin_id": "workers.agent.fabric",
+    "capability": "worker.schedule",
+    "input": {
+      "agents": [
+        {
+          "id": "local-sales-worker",
+          "role": "sales-worker",
+          "cpu_millis": 1000,
+          "memory_mib": 1024,
+          "tools": [
+            "sales",
+            "smm"
+          ],
+          "remote": false
+        },
+        {
+          "id": "remote-sales-worker",
+          "role": "sales-worker",
+          "cpu_millis": 2000,
+          "memory_mib": 2048,
+          "tools": [
+            "sales",
+            "smm"
+          ],
+          "remote": true
+        }
+      ],
+      "task": {
+        "id": "m5-sales-package",
+        "goal": "verify and package the prepared sales assets",
+        "required_role": "sales-worker",
+        "required_tools": [
+          "sales"
+        ],
+        "cpu_millis": 500,
+        "memory_mib": 512,
+        "allow_remote": true,
+        "epoch": 1
+      }
+    },
+    "approved": false,
+    "risk": "Medium"
+  }
+]

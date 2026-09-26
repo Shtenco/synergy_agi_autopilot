@@ -1,0 +1,567 @@
+{
+  "schema": "synergy.plugin.v1",
+  "id": "browser.local.playwright",
+  "name": "OPEN AUTOPILOT Browser Bridge",
+  "version": "1.0.0",
+  "kind": "browser",
+  "provider": "crates/autopilot-computer-use + tools/browser/bridge.mjs",
+  "capabilities": [
+    {
+      "name": "browser.run_plan",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "NetworkAccess",
+        "ComputerUse"
+      ]
+    },
+    {
+      "name": "browser.navigate",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "NetworkAccess",
+        "ComputerUse"
+      ]
+    },
+    {
+      "name": "browser.snapshot",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "ComputerUse"
+      ]
+    },
+    {
+      "name": "browser.click",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": [
+        "ComputerUse"
+      ]
+    },
+    {
+      "name": "browser.fill",
+      "risk": "High",
+      "requires_approval": true,
+      "mapped_core_capabilities": [
+        "ComputerUse"
+      ]
+    },
+    {
+      "name": "browser.wait",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "ComputerUse"
+      ]
+    },
+    {
+      "name": "browser.screenshot",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "ComputerUse"
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "transport": "native_node",
+      "address": "tools/browser/bridge.mjs"
+    }
+  ],
+  "tags": [
+    "browser",
+    "playwright",
+    "computer-use",
+    "web"
+  ],
+  "requires": [],
+  "enabled_by_default": false,
+  "input_contracts": {
+    "browser.run_plan": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "profile_dir": {
+          "type": "string"
+        },
+        "headless": {
+          "type": "boolean",
+          "default": true
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000
+        }
+      },
+      "required": [
+        "actions"
+      ],
+      "additionalProperties": false
+    },
+    "browser.navigate": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "profile_dir": {
+          "type": "string"
+        },
+        "headless": {
+          "type": "boolean",
+          "default": true
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "browser.snapshot": {
+      "type": "object",
+      "properties": {
+        "profile_dir": {
+          "type": "string"
+        },
+        "headless": {
+          "type": "boolean",
+          "default": true
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000
+        }
+      },
+      "additionalProperties": false
+    },
+    "browser.click": {
+      "type": "object",
+      "properties": {
+        "selector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile_dir": {
+          "type": "string"
+        },
+        "headless": {
+          "type": "boolean",
+          "default": true
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000
+        }
+      },
+      "required": [
+        "selector"
+      ],
+      "additionalProperties": false
+    },
+    "browser.fill": {
+      "type": "object",
+      "properties": {
+        "selector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string"
+        },
+        "profile_dir": {
+          "type": "string"
+        },
+        "headless": {
+          "type": "boolean",
+          "default": true
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000
+        }
+      },
+      "required": [
+        "selector",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "browser.wait": {
+      "type": "object",
+      "properties": {
+        "selector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000
+        },
+        "profile_dir": {
+          "type": "string"
+        },
+        "headless": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "selector"
+      ],
+      "additionalProperties": false
+    },
+    "browser.screenshot": {
+      "type": "object",
+      "properties": {
+        "output": {
+          "type": "string"
+        },
+        "profile_dir": {
+          "type": "string"
+        },
+        "headless": {
+          "type": "boolean",
+          "default": true
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 30000
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "output_contracts": {
+    "browser.run_plan": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.navigate": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "navigate"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "status": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "url",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.snapshot": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "snapshot"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "title": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "url",
+              "title",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.click": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "click"
+              },
+              "selector": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "selector",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.fill": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "fill"
+              },
+              "selector": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "selector"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.wait": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "wait_for"
+              },
+              "selector": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "selector"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "browser.screenshot": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "final_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "action": {
+                "type": "string",
+                "const": "screenshot"
+              },
+              "output": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "action",
+              "output"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "ok",
+        "final_url",
+        "results"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

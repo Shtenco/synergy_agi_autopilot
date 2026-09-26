@@ -1,0 +1,12 @@
+[package]
+name = "autopilot-harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+autopilot-runtime = { path = "../autopilot-runtime" }
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.local/schemas/synergy.cognitive-plan.v1.schema.json",
+  "title": "SYNERGY Cognitive Plan Proposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "goal",
+    "steps"
+  ],
+  "properties": {
+    "schema": {
+      "const": "synergy.cognitive-plan.v1"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "objective",
+          "plugin_id",
+          "capability"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "objective": {
+            "type": "string",
+            "minLength": 1
+          },
+          "plugin_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capability": {
+            "type": "string",
+            "minLength": 1
+          },
+          "hints": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

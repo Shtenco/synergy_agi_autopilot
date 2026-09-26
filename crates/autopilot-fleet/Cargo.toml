@@ -1,0 +1,9 @@
+[package]
+name = "autopilot-fleet"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+autopilot-domain = { path = "../autopilot-domain" }
+thiserror.workspace = true

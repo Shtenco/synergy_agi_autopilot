@@ -1,0 +1,17 @@
+{
+  "schema":"synergy.plugin.v1",
+  "id":"capability.crm",
+  "name":"Universal CRM Capability Pack",
+  "version":"1.0.0",
+  "kind":"business",
+  "provider":"connector.gateway",
+  "capabilities":[
+    {"name":"crm.read","risk":"Medium","requires_approval":false,"mapped_core_capabilities":["NetworkAccess"]},
+    {"name":"crm.record.create","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess"]},
+    {"name":"crm.record.update","risk":"High","requires_approval":true,"mapped_core_capabilities":["NetworkAccess"]}
+  ],
+  "endpoints":[{"transport":"openapi_gateway","address":"connector.gateway/openapi.call"}],
+  "tags":["crm","sales","openapi"],
+  "requires":["connector.gateway"],
+  "enabled_by_default":false
+}

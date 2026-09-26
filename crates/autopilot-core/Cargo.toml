@@ -1,0 +1,13 @@
+[package]
+name = "autopilot-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+autopilot-audit = { path = "../autopilot-audit" }
+autopilot-domain = { path = "../autopilot-domain" }
+autopilot-policy = { path = "../autopilot-policy" }
+thiserror.workspace = true
+tokio.workspace = true

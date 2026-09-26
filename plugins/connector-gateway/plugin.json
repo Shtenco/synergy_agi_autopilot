@@ -1,0 +1,253 @@
+{
+  "schema": "synergy.plugin.v1",
+  "id": "connector.gateway",
+  "name": "SYNERGY Universal Connector Gateway",
+  "version": "1.0.0",
+  "kind": "open_api",
+  "provider": "sidecars/connector-gateway",
+  "capabilities": [
+    {
+      "name": "http.request",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "NetworkAccess"
+      ]
+    },
+    {
+      "name": "openapi.call",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "NetworkAccess"
+      ]
+    },
+    {
+      "name": "database.query",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": [
+        "ReadWorkspace"
+      ]
+    },
+    {
+      "name": "queue.publish",
+      "risk": "Medium",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    },
+    {
+      "name": "queue.consume",
+      "risk": "Low",
+      "requires_approval": false,
+      "mapped_core_capabilities": []
+    }
+  ],
+  "endpoints": [
+    {
+      "transport": "http-loopback",
+      "address": "http://127.0.0.1:8150"
+    }
+  ],
+  "tags": [
+    "openapi",
+    "oauth2",
+    "http",
+    "database",
+    "queue",
+    "webhook",
+    "connector"
+  ],
+  "requires": [],
+  "enabled_by_default": false,
+  "input_contracts": {
+    "http.request": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "method": {
+          "type": "string",
+          "default": "GET"
+        },
+        "headers": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        },
+        "body": {},
+        "bearer_secret": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "openapi.call": {
+      "type": "object",
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "path_params": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        },
+        "query_params": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        },
+        "header_params": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        },
+        "body": {},
+        "oauth2": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "base_url",
+        "operation_id",
+        "document"
+      ],
+      "additionalProperties": false
+    },
+    "database.query": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sql": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "type": "array",
+          "default": []
+        }
+      },
+      "required": [
+        "path",
+        "sql"
+      ],
+      "additionalProperties": false
+    },
+    "queue.publish": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "body": {}
+      },
+      "required": [
+        "topic",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "queue.consume": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "topic"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "output_contracts": {
+    "database.query": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "queue.publish": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ok",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "queue.consume": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "body": {},
+                "created_at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "body",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

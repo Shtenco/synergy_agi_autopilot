@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable Rust
+        run: rustup update stable && rustup default stable
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test --workspace
+      - name: M10 verified cognitive DAG smoke
+        run: cargo run -p open-autopilot -- cognitive-plan-verify --proposal examples/m10/sales-to-file-cognitive-plan.json
+
+  desktop-renderer:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package.json
+      - name: Install renderer dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript and Vite build
+        run: npm run build
+
+  browser-bridge:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install bridge dependencies
+        run: npm install --no-audit --no-fund
+      - name: Syntax check
+        run: node --check bridge.mjs
+
+  python-sidecars:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install business runtime
+        run: python -m pip install -e "./sidecars/business-runtime[test]"
+      - name: Run business runtime tests
+        run: python -m pytest sidecars/business-runtime/tests -q
+      - name: Install NEXUS compatibility bridge
+        run: python -m pip install -e ./sidecars/nexus-bridge
+      - name: Validate NEXUS bridge import
+        run: python -c "from nexus_bridge.app import app; assert app.title.startswith('SYNERGY NEXUS')"
+      - name: Install Connector Gateway
+        run: python -m pip install -e ./sidecars/connector-gateway
+      - name: Validate Connector Gateway import
+        run: python -c "from connector_gateway.app import app; assert app.title.startswith('SYNERGY Connector')"
+      - name: Validate capability catalog
+        run: python -m json.tool catalog/repositories.json > /dev/null
+      - name: Validate plugin schemas and manifests
+        shell: bash
+        run: |
+          python -m json.tool schemas/synergy.plugin.v1.schema.json > /dev/null
+          python -m json.tool schemas/synergy.cli-capabilities.v1.schema.json > /dev/null
+          python -m json.tool schemas/synergy.cognitive-plan.v1.schema.json > /dev/null
+          python -m json.tool examples/m10/sales-to-file-cognitive-plan.json > /dev/null
+          for f in plugins/*/plugin.json; do python -m json.tool "$f" > /dev/null; done
+      - name: Compile M8 discovery scripts
+        run: python -m py_compile scripts/discover-plugin-surfaces.py scripts/propose-plugin-build.py
+      - name: M8 static self-build smoke
+        shell: bash
+        run: |
+          mkdir -p /tmp/m8-fixture
+          cat > /tmp/m8-fixture/openapi.json <<'JSON'
+          {
+            "openapi":"3.0.0",
+            "servers":[{"url":"https://api.example.com"}],
+            "paths":{
+              "/status":{
+                "get":{"operationId":"getStatus"}
+              }
+            }
+          }
+          JSON
+          python scripts/discover-plugin-surfaces.py /tmp/m8-fixture --out /tmp/m8-discovery.json
+          python scripts/propose-plugin-build.py /tmp/m8-discovery.json \
+            --capability custom.status.read \
+            --plugin-id generated.smoke.status \
+            --name "Smoke Status" \
+            --base-url https://api.example.com \
+            --out /tmp/m8-proposals.json
+          python -c "import json; d=json.load(open('/tmp/m8-proposals.json')); assert any(p.get('ready_to_build') for p in d['proposals'])"
+      - name: M9 declarative CLI smoke
+        shell: bash
+        run: |
+          mkdir -p /tmp/m9-cli
+          cat > /tmp/m9-cli/synergy.cli.json <<'JSON'
+          {
+            "schema":"synergy.cli-capabilities.v1",
+            "commands":[{
+              "program":"lead-tool",
+              "capability":"crm.read",
+              "args":["--json"],
+              "risk":"Medium",
+              "input_schema":{
+                "type":"object",
+                "properties":{"query":{"type":"string"}},
+                "required":["query"],
+                "additionalProperties":false
+              },
+              "output_schema":{
+                "type":"object",
+                "properties":{"items":{"type":"array","items":{"type":"object"}}},
+                "required":["items"],
+                "additionalProperties":false
+              }
+            }]
+          }
+          JSON
+          python scripts/discover-plugin-surfaces.py /tmp/m9-cli --out /tmp/m9-discovery.json
+          python scripts/propose-plugin-build.py /tmp/m9-discovery.json \
+            --capability crm.read \
+            --plugin-id generated.smoke.crm \
+            --name "Smoke CRM" \
+            --out /tmp/m9-proposals.json
+          python -c "import json; d=json.load(open('/tmp/m9-proposals.json')); p=[x for x in d['proposals'] if x.get('ready_to_build')][0]; assert p['build_request']['input_contract']['required']==['query']; assert p['build_request']['output_contract']['required']==['items']"
+      - name: Compile Python sidecars
+        run: python -m compileall -q sidecars/business-runtime/src sidecars/nexus-bridge/src sidecars/connector-gateway/src
