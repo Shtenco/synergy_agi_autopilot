@@ -649,6 +649,13 @@ async fn main() -> Result<(), String> {
             config.local_workspace = workspace;
             config.control_plane_db = control_db;
             config.timeout_ms = Some(120_000);
+            config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
+            config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
+            config.bearer_token_env.insert("business.auto-company".into(), "SYNERGY_API_TOKEN".into());
+            config.bearer_token_env.insert("connector.gateway".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.email".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.calendar".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.crm".into(), "CONNECTOR_GATEWAY_TOKEN".into());
             if !allow_env.is_empty() { config.env_allowlist.insert(plugin.clone(), allow_env); }
             let executor = PluginExecutor::new(
                 registry,
@@ -713,6 +720,10 @@ async fn main() -> Result<(), String> {
             config.bearer_token_env.insert("business.capability.runtime".into(), "AUTOPILOT_API_TOKEN".into());
             config.bearer_token_env.insert("intelligence.nexus".into(), "NEXUS_BRIDGE_TOKEN".into());
             config.bearer_token_env.insert("business.auto-company".into(), "SYNERGY_API_TOKEN".into());
+            config.bearer_token_env.insert("connector.gateway".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.email".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.calendar".into(), "CONNECTOR_GATEWAY_TOKEN".into());
+            config.bearer_token_env.insert("capability.crm".into(), "CONNECTOR_GATEWAY_TOKEN".into());
             for plugin_id in registry.list().map(|manifest| manifest.id.clone()).collect::<Vec<_>>() {
                 if !allow_env.is_empty() { config.env_allowlist.insert(plugin_id, allow_env.clone()); }
             }
