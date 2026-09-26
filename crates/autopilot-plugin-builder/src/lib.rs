@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use autopilot_capability_graph::CapabilityGraph;
 use autopilot_domain::{Capability, RiskClass};
-use autopilot_plugins::{PluginCapability, PluginEndpoint, PluginKind, PluginManifest, PLUGIN_SCHEMA_V1};
+use autopilot_plugins::{PluginAdapter, PluginCapability, PluginEndpoint, PluginKind, PluginManifest, PLUGIN_SCHEMA_V1};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -196,6 +196,22 @@ impl PluginBuilder {
             tags: request.tags,
             requires: dependencies(&request.source),
             enabled_by_default: false,
+            adapter: Some(match &request.source {
+                AdapterSource::OpenApi { base_url, operation_id, document } => PluginAdapter::OpenApi {
+                    base_url: base_url.clone(),
+                    operation_id: operation_id.clone(),
+                    document: document.clone(),
+                },
+                AdapterSource::McpStdio { command, args, tool } => PluginAdapter::McpStdio {
+                    command: command.clone(),
+                    args: args.clone(),
+                    tool: tool.clone(),
+                },
+                AdapterSource::Cli { program, args } => PluginAdapter::Cli {
+                    program: program.clone(),
+                    args: args.clone(),
+                },
+            }),
         };
         manifest.validate().map_err(|error| BuilderError::Invalid(error.to_string()))?;
         Ok(PluginCandidate {
