@@ -16,6 +16,7 @@ $env:PATH = "$p7Bin;$env:PATH"
 Write-Host "== Install local sidecars =="
 python -m pip install -e "$repo\sidecars\business-runtime[test]"
 python -m pip install -e "$repo\sidecars\nexus-bridge"
+python -m pip install -e "$repo\sidecars\connector-gateway"
 
 Write-Host "== Start Business Runtime :8120 =="
 $business = Start-Process python -ArgumentList @(
@@ -29,6 +30,13 @@ $nexus = Start-Process python -ArgumentList @(
     "-m","uvicorn","nexus_bridge.app:app",
     "--app-dir","$repo\sidecars\nexus-bridge\src",
     "--host","127.0.0.1","--port","8130"
+) -PassThru
+
+Write-Host "== Start Connector Gateway :8150 =="
+$connector = Start-Process python -ArgumentList @(
+    "-m","uvicorn","connector_gateway.app:app",
+    "--app-dir","$repo\sidecars\connector-gateway\src",
+    "--host","127.0.0.1","--port","8150"
 ) -PassThru
 
 $company = $null
@@ -55,6 +63,7 @@ Write-Host ""
 Write-Host "M5 stack started."
 Write-Host "Business PID: $($business.Id)"
 Write-Host "NEXUS PID: $($nexus.Id)"
+Write-Host "Connector Gateway PID: $($connector.Id)"
 if ($company) { Write-Host "Auto-Company PID: $($company.Id)" }
 Write-Host ""
 Write-Host "Example:"
