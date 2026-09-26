@@ -659,7 +659,14 @@ impl FilesystemOpenApiDiscovery {
             for (method, operation) in methods {
                 if !matches!(method.as_str(), "get" | "post" | "put" | "patch" | "delete") { continue; }
                 let Some(operation_id) = operation.get("operationId").and_then(Value::as_str) else { continue };
-                let score = Self::operation_score(operation_id, path_name, capability, method);
+                let has_required_parameter = operation.get("parameters")
+                    .and_then(Value::as_array)
+                    .is_some_and(|parameters| parameters.iter().any(|parameter| {
+                        parameter.get("required").and_then(Value::as_bool) == Some(true)
+                    }));
+                let autonomously_invocable = !path_name.contains('{') && !has_required_parameter;
+                let mut score = Self::operation_score(operation_id, path_name, capability, method);
+                if autonomously_invocable { score += 40; } else { score -= 80; }
                 let risk = if method == "get" { RiskClass::Medium } else { RiskClass::High };
                 let id_suffix = operation_id.to_ascii_lowercase()
                     .chars()
