@@ -225,21 +225,7 @@ fn initial_plugin_registry() -> Result<PluginRegistry, String> {
         registry.register(manifest).map_err(|error| error.to_string())?;
     }
     if let Ok(root) = std::env::var("AUTOPILOT_GENERATED_PLUGINS") {
-        let root = PathBuf::from(root);
-        if root.exists() {
-            let entries = fs::read_dir(&root)
-                .map_err(|error| format!("cannot read generated plugin directory {}: {error}", root.display()))?;
-            for entry in entries {
-                let entry = entry.map_err(|error| error.to_string())?;
-                let manifest_path = entry.path().join("plugin.json");
-                if !manifest_path.is_file() { continue; }
-                let raw = fs::read_to_string(&manifest_path)
-                    .map_err(|error| format!("cannot read {}: {error}", manifest_path.display()))?;
-                let manifest = parse_manifest_json(&raw)
-                    .map_err(|error| format!("invalid generated plugin {}: {error}", manifest_path.display()))?;
-                registry.register(manifest).map_err(|error| error.to_string())?;
-            }
-        }
+        registry.load_dir(PathBuf::from(root)).map_err(|error| error.to_string())?;
     }
     registry.validate_dependencies().map_err(|error| error.to_string())?;
     Ok(registry)
