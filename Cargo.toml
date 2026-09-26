@@ -23,6 +23,7 @@ members = [
   "crates/autopilot-secrets",
   "crates/autopilot-control-plane",
   "crates/autopilot-connectors",
+  "crates/autopilot-capability-graph",
   "apps/autopilot-cli",
 ]
 exclude = ["apps/desktop/src-tauri"]
