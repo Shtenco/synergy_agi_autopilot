@@ -314,10 +314,21 @@ fn workflow_to_plugin_steps(
                 step.id, step.id
             ));
         }
+        let typed_bindings = plan.typed_edges.iter()
+            .filter(|edge| edge.to_step == step.id)
+            .map(|edge| serde_json::json!({
+                "from_step":edge.from_step,
+                "from_path":edge.from_path,
+                "to_field":edge.to_field,
+                "compatibility":edge.compatibility,
+                "score":edge.score
+            }))
+            .collect::<Vec<_>>();
         let mut input = serde_json::json!({
             "$semantic_contract": step.input_contract,
             "$semantic_goal": step.objective,
             "$semantic_hints": step.mapped_arguments,
+            "$typed_bindings": typed_bindings,
         });
         if let Some(approval_id) = approval_ids.get(&step.id) {
             input["_approval_id"] = serde_json::Value::String(approval_id.clone());
