@@ -51,6 +51,167 @@
           }
         }
       }
+    },
+    "bindings": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from_step",
+          "to_step",
+          "to_field",
+          "transform"
+        ],
+        "properties": {
+          "from_step": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to_step": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to_field": {
+            "type": "string",
+            "minLength": 1
+          },
+          "transform": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ops"
+            ],
+            "properties": {
+              "ops": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "field"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "get_field"
+                        },
+                        "field": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "index"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "index"
+                        },
+                        "index": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1024
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "first"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "field"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "map_field"
+                        },
+                        "field": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "field",
+                        "value"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "filter_eq"
+                        },
+                        "field": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "value": {}
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "output_schema"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "parse_json"
+                        },
+                        "output_schema": {
+                          "type": "object"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "separator"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "join_strings"
+                        },
+                        "separator": {
+                          "type": "string",
+                          "maxLength": 32
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
