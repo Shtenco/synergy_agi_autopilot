@@ -214,6 +214,15 @@ mod tests {
     }
 
     #[test]
+    fn default_organization_file_is_valid() {
+        let raw = include_str!("../../../config/organization.default.json");
+        let spec: OrganizationSpec = serde_json::from_str(raw).unwrap();
+        let org = Organization::validate(spec).unwrap();
+        assert!(org.spec().departments.len() >= 10);
+        assert!(org.spec().employees.len() >= 20);
+    }
+
+    #[test]
     fn organization_validates_and_routes_employee() {
         let org=Organization::validate(sample()).unwrap();
         let eligible=org.eligible_employees("business.sales.compose_offer",RiskClass::Low);
