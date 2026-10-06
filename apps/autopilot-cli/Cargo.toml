@@ -22,6 +22,9 @@ autopilot-plugins = { path = "../../crates/autopilot-plugins" }
 autopilot-plugin-runtime = { path = "../../crates/autopilot-plugin-runtime" }
 autopilot-plugin-builder = { path = "../../crates/autopilot-plugin-builder" }
 autopilot-semantic-planner = { path = "../../crates/autopilot-semantic-planner" }
+autopilot-transform = { path = "../../crates/autopilot-transform" }
+autopilot-outcomes = { path = "../../crates/autopilot-outcomes" }
+autopilot-org = { path = "../../crates/autopilot-org" }
 autopilot-recovery = { path = "../../crates/autopilot-recovery" }
 autopilot-router = { path = "../../crates/autopilot-router" }
 autopilot-runtime = { path = "../../crates/autopilot-runtime" }
