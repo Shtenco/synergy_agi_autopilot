@@ -18,6 +18,7 @@ use autopilot_plugin_runtime::{PluginCall, PluginExecutor};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use autopilot_semantic_planner::{JsonContractValidator, MappingContext, SemanticArgumentMapper};
+use autopilot_transform::VerifiedTransform;
 use autopilot_verification::{VerificationCheck, VerificationPipeline};
 use autopilot_workspace::WorkspaceManager;
 use serde::{Deserialize, Serialize};
@@ -169,11 +170,23 @@ fn resolve_semantic_plugin_input(value: Value, context: &[PluginStepContext]) ->
             .find(|entry| entry.id.as_deref() == Some(from_step))
             .and_then(|entry| entry.value.get("output"))
             .ok_or_else(|| format!("typed binding source output is unavailable: {from_step}"))?;
-        let mut current = source;
-        for segment in from_path.split('.') {
-            current = current.get(segment)
-                .ok_or_else(|| format!("typed binding path not found: {from_step}.{from_path}"))?;
-        }
+        let transformed;
+        let current = if let Some(transform_value) = binding.get("transform").filter(|value| !value.is_null()) {
+            let transform: VerifiedTransform = serde_json::from_value(transform_value.clone())
+                .map_err(|error| format!("invalid verified transform in runtime binding: {error}"))?;
+            transformed = transform.apply(source.clone())
+                .map_err(|error| format!("verified transform runtime failure from {from_step}: {error}"))?;
+            &transformed
+        } else {
+            let mut current = source;
+            if !from_path.is_empty() {
+                for segment in from_path.split('.') {
+                    current = current.get(segment)
+                        .ok_or_else(|| format!("typed binding path not found: {from_step}.{from_path}"))?;
+                }
+            }
+            current
+        };
         let pointer = format!(
             "/properties/{}",
             to_field.replace('~', "~0").replace('/', "~1")
