@@ -172,7 +172,7 @@ impl OutcomeStore {
         candidates: &[String],
         min_runs: u64,
     ) -> Result<Option<RouteStats>, OutcomeError> {
-        let allowed = candidates.iter().collect::<std::collections::BTreeSet<_>>();
+        let allowed = candidates.iter().cloned().collect::<std::collections::BTreeSet<_>>();
         let mut values = self.stats(goal_fingerprint)?;
         values.retain(|item| item.runs >= min_runs && allowed.contains(&item.route_key));
         values.sort_by(|a,b| b.score.total_cmp(&a.score).then_with(|| a.route_key.cmp(&b.route_key)));
@@ -181,14 +181,13 @@ impl OutcomeStore {
 }
 
 pub fn fingerprint_goal(goal: &str) -> String {
-    use std::hash::{DefaultHasher, Hash, Hasher};
+    use sha2::{Digest, Sha256};
     let normalized = goal.split_whitespace()
         .map(|part| part.to_ascii_lowercase())
         .collect::<Vec<_>>()
         .join(" ");
-    let mut hasher = DefaultHasher::new();
-    normalized.hash(&mut hasher);
-    format!("goal:{:016x}", hasher.finish())
+    let digest = Sha256::digest(normalized.as_bytes());
+    format!("goal:{}", digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>())
 }
 
 #[cfg(test)]
