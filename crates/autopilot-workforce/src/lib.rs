@@ -536,6 +536,21 @@ impl WorkforceStore {
         Ok(rows.collect::<std::result::Result<Vec<_>,_>>()?)
     }
 
+    pub fn employee_node(&self,employee_id:&str)->Result<Option<WorkforceNode>> {
+        let Some(node_id)=self.bound_node(employee_id)? else{return Ok(None)};
+        let conn=self.conn()?;
+        conn.query_row("SELECT node_id,kind,endpoint,capabilities_json,cpu_millis,memory_mib,online,last_heartbeat FROM workforce_nodes WHERE node_id=?1",
+          [node_id],|r|{
+            let raw:String=r.get(3)?;
+            Ok(WorkforceNode{
+              node_id:r.get(0)?,kind:r.get(1)?,endpoint:r.get(2)?,
+              capabilities:serde_json::from_str(&raw).map_err(|e|rusqlite::Error::FromSqlConversionFailure(raw.len(),rusqlite::types::Type::Text,Box::new(e)))?,
+              cpu_millis:r.get::<_,i64>(4)? as u64,memory_mib:r.get::<_,i64>(5)? as u64,
+              online:r.get::<_,i64>(6)?!=0,last_heartbeat:parse_time(r.get(7)?)?
+            })
+          }).optional().map_err(WorkforceError::from)
+    }
+
     pub fn list_nodes(&self)->Result<Vec<WorkforceNode>> {
         let conn=self.conn()?;
         let mut stmt=conn.prepare("SELECT node_id,kind,endpoint,capabilities_json,cpu_millis,memory_mib,online,last_heartbeat FROM workforce_nodes ORDER BY node_id")?;
@@ -590,6 +605,7 @@ impl WorkforceStore {
     }
 }
 
+#[derive(Clone)]
 pub struct WorkforceExecutor {
     store: WorkforceStore,
     organization: Arc<Organization>,
@@ -606,9 +622,30 @@ impl WorkforceExecutor {
         let employee=self.organization.employee(employee_id)
           .ok_or_else(||WorkforceError::UnknownEmployee(employee_id.into()))?;
         let policy=self.config.policy_for(&employee.department_id);
+        if let Some(node)=self.store.employee_node(employee_id)? {
+            if !node.online { return Err(WorkforceError::NodeOffline{node:node.node_id}); }
+            if !node.endpoint.starts_with("local://") {
+                return Err(WorkforceError::Execution(format!(
+                    "remote employee node {} ({}) is registered but remote execution is fail-closed until SYNERGY P7.4 encrypted task delegation/result return is implemented",
+                    node.node_id,node.endpoint
+                )));
+            }
+        }
         let Some(item)=self.store.lease_next(&self.organization,employee_id,owner,Utc::now(),&policy)? else {
             return Ok(None);
         };
+
+        let memory = self.plugins.execute(PluginCall{
+          plugin_id:"intelligence.nexus".into(),
+          capability:"memory.search".into(),
+          input:serde_json::json!({
+            "query":format!("{} {}",employee.id,item.goal),
+            "namespaces":[employee.memory_namespace],
+            "limit":12
+          }),
+          approved:false,
+        }).await.ok().map(|result|result.output).unwrap_or(Value::Null);
+
         let mut input=item.input.clone();
         if let Some(object)=input.as_object_mut() {
             object.insert("_workforce".into(),serde_json::json!({
@@ -618,7 +655,8 @@ impl WorkforceExecutor {
               "workspace":employee.workspace,
               "memory_namespace":employee.memory_namespace,
               "model_policy":employee.model_policy,
-              "device_policy":employee.device_policy
+              "device_policy":employee.device_policy,
+              "memory":memory
             }));
             if let Some(budget_id)=&item.budget_id {
                 object.insert("_budget".into(),serde_json::json!({
@@ -640,14 +678,64 @@ impl WorkforceExecutor {
         let latency=started.elapsed().as_millis().min(u64::MAX as u128) as u64;
         match result {
             Ok(result)=>{
-                let value=serde_json::to_value(result).map_err(|e|WorkforceError::Execution(e.to_string()))?;
+                let value=serde_json::to_value(&result).map_err(|e|WorkforceError::Execution(e.to_string()))?;
                 self.store.complete(item.id,employee_id,&value,latency,0,1.0)?;
+                let mut content=serde_json::to_string(&serde_json::json!({
+                  "work_item_id":item.id,
+                  "goal":item.goal,
+                  "plugin_id":item.plugin_id,
+                  "capability":item.capability,
+                  "result":result.output
+                })).map_err(|e|WorkforceError::Execution(e.to_string()))?;
+                if content.len()>4000 { content.truncate(4000); }
+                let key=format!("work:{}",item.id);
+                if self.plugins.execute(PluginCall{
+                  plugin_id:"intelligence.nexus".into(),
+                  capability:"memory.upsert".into(),
+                  input:serde_json::json!({
+                    "key":key,
+                    "content":content,
+                    "namespace":employee.memory_namespace,
+                    "metadata":{"employee_id":employee.id,"department_id":employee.department_id,"verified":true},
+                    "source":"synergy-ai-autopilot-m12"
+                  }),
+                  approved:false,
+                }).await.is_ok() {
+                    self.store.checkpoint_memory(employee_id,&format!("work:{}",item.id),
+                      &format!("nexus://{}/work:{}",employee.memory_namespace,item.id),Some("verified work outcome"))?;
+                }
             }
             Err(error)=>{
                 self.store.fail_or_retry(&item,employee_id,&error.to_string(),Utc::now(),&policy)?;
             }
         }
         self.store.get_work_item(item.id)?.ok_or(WorkforceError::UnknownWorkItem(item.id)).map(Some)
+    }
+
+    pub async fn run_department_once(
+        &self,
+        department_id:&str,
+        owner_prefix:&str,
+    )->Result<Vec<(String,Option<WorkItem>)>> {
+        let mut jobs=tokio::task::JoinSet::new();
+        for employee in self.organization.spec().employees.iter()
+            .filter(|employee|employee.department_id==department_id && employee.autonomous)
+        {
+            let worker=self.clone();
+            let employee_id=employee.id.clone();
+            let owner=format!("{owner_prefix}:{}",employee.id);
+            jobs.spawn(async move {
+                let result=worker.run_employee_once(&employee_id,&owner).await;
+                (employee_id,result)
+            });
+        }
+        let mut results=Vec::new();
+        while let Some(joined)=jobs.join_next().await {
+            let (employee,result)=joined.map_err(|e|WorkforceError::Execution(format!("department worker join failure: {e}")))?;
+            results.push((employee,result?));
+        }
+        results.sort_by(|a,b|a.0.cmp(&b.0));
+        Ok(results)
     }
 
     pub fn maintain(&self,now:DateTime<Utc>)->Result<MaintenanceReport> {
