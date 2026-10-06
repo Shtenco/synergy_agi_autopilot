@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use autopilot_capability_graph::CapabilityGraph;
 use autopilot_domain::RiskClass;
 use autopilot_plugins::PluginRegistry;
+use autopilot_transform::VerifiedTransform;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 use thiserror::Error;
@@ -570,6 +571,8 @@ pub struct TypedDataflowEdge {
     pub to_field: String,
     pub compatibility: SchemaCompatibility,
     pub score: u16,
+    #[serde(default)]
+    pub transform: Option<VerifiedTransform>,
 }
 
 #[derive(Clone, Debug)]
@@ -814,6 +817,7 @@ impl VerifiedDagOptimizer {
                             to_field: field.clone(),
                             compatibility,
                             score,
+                            transform: None,
                         });
                     }
                 }
@@ -946,10 +950,20 @@ pub struct CognitiveStepProposal {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CognitiveBindingProposal {
+    pub from_step: String,
+    pub to_step: String,
+    pub to_field: String,
+    pub transform: VerifiedTransform,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CognitivePlanProposal {
     pub schema: String,
     pub goal: String,
     pub steps: Vec<CognitiveStepProposal>,
+    #[serde(default)]
+    pub bindings: Vec<CognitiveBindingProposal>,
 }
 
 pub fn cognitive_planner_prompt(goal: &str, registry: &PluginRegistry) -> String {
@@ -979,6 +993,16 @@ pub fn cognitive_planner_prompt(goal: &str, registry: &PluginRegistry) -> String
                 "plugin_id":"exact plugin_id from catalog",
                 "capability":"exact capability from catalog",
                 "hints":{}
+            }],
+            "bindings":[{
+                "from_step":"producer-step-id",
+                "to_step":"consumer-step-id",
+                "to_field":"required-consumer-field",
+                "transform":{"ops":[
+                    {"op":"get_field","field":"results"},
+                    {"op":"index","index":0},
+                    {"op":"get_field","field":"text"}
+                ]}
             }]
         }
     }).to_string()
@@ -1052,15 +1076,94 @@ impl VerifiedCognitivePlanner {
             });
         }
 
-        VerifiedDagOptimizer::optimize(WorkflowPlan {
+        let plan = VerifiedDagOptimizer::optimize(WorkflowPlan {
             goal: proposal.goal.clone(),
             steps,
             unresolved_objectives: Vec::new(),
             typed_edges: Vec::new(),
             execution_layers: Vec::new(),
             ready: false,
-        })
+        })?;
+        apply_cognitive_bindings(plan, &proposal.bindings)
     }
+}
+
+fn apply_cognitive_bindings(
+    mut plan: WorkflowPlan,
+    bindings: &[CognitiveBindingProposal],
+) -> Result<WorkflowPlan, SemanticError> {
+    for binding in bindings {
+        let producer = plan.steps.iter().find(|step| step.id == binding.from_step)
+            .ok_or_else(|| SemanticError::InvalidCognitivePlan(format!(
+                "binding references unknown producer step: {}", binding.from_step
+            )))?;
+        let output_contract = producer.output_contract.as_ref()
+            .ok_or_else(|| SemanticError::InvalidCognitivePlan(format!(
+                "binding producer has no output contract: {}", binding.from_step
+            )))?;
+        let consumer = plan.steps.iter().find(|step| step.id == binding.to_step)
+            .ok_or_else(|| SemanticError::InvalidCognitivePlan(format!(
+                "binding references unknown consumer step: {}", binding.to_step
+            )))?;
+        let pointer = format!(
+            "/properties/{}",
+            escape_pointer(&binding.to_field)
+        );
+        let target_schema = consumer.input_contract.pointer(&pointer)
+            .ok_or_else(|| SemanticError::InvalidCognitivePlan(format!(
+                "binding target field is not declared: {}.{}", binding.to_step, binding.to_field
+            )))?;
+        let transformed_schema = binding.transform.infer_output_schema(output_contract)
+            .map_err(|error| SemanticError::InvalidCognitivePlan(format!(
+                "transform proof failed {} -> {}.{}: {error}",
+                binding.from_step, binding.to_step, binding.to_field
+            )))?;
+        let compatibility = TypedSchemaMatcher::compatible(&transformed_schema, target_schema)
+            .ok_or_else(|| SemanticError::InvalidCognitivePlan(format!(
+                "transform output schema is incompatible with {}.{}",
+                binding.to_step, binding.to_field
+            )))?;
+
+        plan.typed_edges.retain(|edge| {
+            !(edge.to_step == binding.to_step && edge.to_field == binding.to_field)
+        });
+        plan.typed_edges.push(TypedDataflowEdge {
+            from_step: binding.from_step.clone(),
+            from_path: String::new(),
+            to_step: binding.to_step.clone(),
+            to_field: binding.to_field.clone(),
+            compatibility,
+            score: 120,
+            transform: Some(binding.transform.clone()),
+        });
+    }
+
+    for step in &mut plan.steps {
+        step.depends_on.clear();
+    }
+    for edge in &plan.typed_edges {
+        if let Some(step) = plan.steps.iter_mut().find(|step| step.id == edge.to_step) {
+            if !step.depends_on.contains(&edge.from_step) {
+                step.depends_on.push(edge.from_step.clone());
+            }
+        }
+    }
+    let covered = plan.typed_edges.iter()
+        .map(|edge| (edge.to_step.clone(), edge.to_field.clone()))
+        .collect::<BTreeSet<_>>();
+    for step in &mut plan.steps {
+        step.unresolved_required.retain(|field| {
+            !covered.contains(&(step.id.clone(), field.clone()))
+        });
+    }
+    plan.execution_layers = topological_layers(&plan.steps)?;
+    plan.ready = plan.unresolved_objectives.is_empty()
+        && plan.steps.iter().all(|step| {
+            step.contract_declared
+                && step.validation_errors.is_empty()
+                && step.unresolved_required.is_empty()
+        });
+    Ok(plan)
 }
 
 pub struct AdaptiveWorkflowSynthesizer;
@@ -1704,6 +1807,7 @@ mod tests {
             schema:"evil.plan.v1".into(),
             goal:"x".into(),
             steps:Vec::new(),
+            bindings:Vec::new(),
         };
         assert!(matches!(
             VerifiedCognitivePlanner::verify(
