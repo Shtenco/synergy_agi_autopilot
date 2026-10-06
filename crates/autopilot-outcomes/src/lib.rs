@@ -165,6 +165,30 @@ impl OutcomeStore {
         values.sort_by(|a,b| b.score.total_cmp(&a.score).then_with(|| a.route_key.cmp(&b.route_key)));
         Ok(values.into_iter().next())
     }
+
+    pub fn best_route_among(
+        &self,
+        goal_fingerprint: &str,
+        candidates: &[String],
+        min_runs: u64,
+    ) -> Result<Option<RouteStats>, OutcomeError> {
+        let allowed = candidates.iter().collect::<std::collections::BTreeSet<_>>();
+        let mut values = self.stats(goal_fingerprint)?;
+        values.retain(|item| item.runs >= min_runs && allowed.contains(&item.route_key));
+        values.sort_by(|a,b| b.score.total_cmp(&a.score).then_with(|| a.route_key.cmp(&b.route_key)));
+        Ok(values.into_iter().next())
+    }
+}
+
+pub fn fingerprint_goal(goal: &str) -> String {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let normalized = goal.split_whitespace()
+        .map(|part| part.to_ascii_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut hasher = DefaultHasher::new();
+    normalized.hash(&mut hasher);
+    format!("goal:{:016x}", hasher.finish())
 }
 
 #[cfg(test)]
