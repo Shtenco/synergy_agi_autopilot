@@ -288,20 +288,25 @@ impl PluginExecutor {
         manifest: &PluginManifest,
         call: PluginCall,
     ) -> Result<PluginResult, PluginRuntimeError> {
-        if call.capability != "worker.schedule" && call.capability != "worker.lease" {
+        if !matches!(call.capability.as_str(), "worker.register" | "worker.schedule" | "worker.lease") {
             return Err(PluginRuntimeError::UnknownCapability {
                 plugin: manifest.id.clone(), capability: call.capability,
             });
         }
-        let agents = call.input.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
-        let task = call.input.get("task").cloned().unwrap_or_else(|| call.input.clone());
         let mut lines = vec![json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}).to_string()];
         let mut request_id = 2u64;
-        for agent in agents {
-            lines.push(json!({"jsonrpc":"2.0","id":request_id,"method":"agent/register","params":agent}).to_string());
-            request_id += 1;
+
+        if call.capability == "worker.register" {
+            lines.push(json!({"jsonrpc":"2.0","id":request_id,"method":"agent/register","params":call.input}).to_string());
+        } else {
+            let agents = call.input.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+            let task = call.input.get("task").cloned().unwrap_or_else(|| call.input.clone());
+            for agent in agents {
+                lines.push(json!({"jsonrpc":"2.0","id":request_id,"method":"agent/register","params":agent}).to_string());
+                request_id += 1;
+            }
+            lines.push(json!({"jsonrpc":"2.0","id":request_id,"method":"task/lease","params":task}).to_string());
         }
-        lines.push(json!({"jsonrpc":"2.0","id":request_id,"method":"task/lease","params":task}).to_string());
         let mut spec = CommandSpec::new("agent-fabric-stdio").profile(ExecutionProfile::Host);
         spec = self.apply_env_allowlist(&manifest.id, spec);
         spec = spec.stdin_data(format!("{}\n", lines.join("\n")));
@@ -317,11 +322,21 @@ impl PluginExecutor {
         }
         let selected = selected.ok_or_else(|| PluginRuntimeError::Transport("missing task/lease response".into()))?;
         if let Some(error) = selected.get("error") { return Err(PluginRuntimeError::Transport(error.to_string())); }
+        let mut output = selected.get("result").cloned().unwrap_or(Value::Null);
+        if call.capability == "worker.register" {
+            let agent_id = call.input.get("id").and_then(Value::as_str).unwrap_or("unknown");
+            if output.is_null() {
+                output = json!({"agent_id":agent_id,"registered":true});
+            } else if let Some(object) = output.as_object_mut() {
+                object.entry("agent_id").or_insert(Value::String(agent_id.to_string()));
+                object.entry("registered").or_insert(Value::Bool(true));
+            }
+        }
         Ok(PluginResult {
             plugin_id: manifest.id.clone(),
             capability: call.capability,
             transport: "synergy.worker.v1+stdio".into(),
-            output: selected.get("result").cloned().unwrap_or(Value::Null),
+            output,
         })
     }
 
