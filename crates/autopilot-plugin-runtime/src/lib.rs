@@ -95,6 +95,8 @@ impl PluginExecutor {
     }
 
     pub fn registry(&self) -> &PluginRegistry { &self.registry }
+    pub fn persistent_control_plane_enabled(&self) -> bool { self.config.control_plane_db.is_some() }
+
 
     fn authorize(&self, manifest: &PluginManifest, call: &PluginCall) -> Result<(), PluginRuntimeError> {
         let capability = manifest.capability(&call.capability).ok_or_else(|| {
