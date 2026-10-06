@@ -1,42 +1,45 @@
 $ErrorActionPreference = "Stop"
 
-Write-Host "== SYNERGY AI AUTOPILOT M5-M10 verification =="
+Write-Host "== SYNERGY AI AUTOPILOT M5-M11 verification =="
 
-Write-Host "[1/11] Rust format"
+Write-Host "[1/13] Rust format"
 cargo fmt --all -- --check
 
-Write-Host "[2/11] Rust clippy"
+Write-Host "[2/13] Rust clippy"
 cargo clippy --workspace --all-targets -- -D warnings
 
-Write-Host "[3/11] Rust tests"
+Write-Host "[3/13] Rust tests"
 cargo test --workspace
 
-Write-Host "[4/11] Browser bridge syntax"
+Write-Host "[4/13] Browser bridge syntax"
 node --check tools/browser/bridge.mjs
 
-Write-Host "[5/11] Business runtime"
+Write-Host "[5/13] Business runtime"
 python -m pip install -e "./sidecars/business-runtime[test]"
 python -m pytest sidecars/business-runtime/tests -q
 
-Write-Host "[6/11] NEXUS bridge"
+Write-Host "[6/13] NEXUS bridge"
 python -m pip install -e ./sidecars/nexus-bridge
 python -c "from nexus_bridge.app import app; assert app.title.startswith('SYNERGY NEXUS')"
 
-Write-Host "[7/11] Connector Gateway"
+Write-Host "[7/13] Connector Gateway"
 python -m pip install -e ./sidecars/connector-gateway
 python -c "from connector_gateway.app import app; assert app.title.startswith('SYNERGY Connector')"
 
-Write-Host "[8/11] Catalog + schemas + Python compile"
+Write-Host "[8/13] Catalog + schemas + Python compile"
 python -m json.tool catalog/repositories.json > $null
 python -m json.tool schemas/synergy.plugin.v1.schema.json > $null
 python -m json.tool schemas/synergy.cli-capabilities.v1.schema.json > $null
 python -m json.tool schemas/synergy.cognitive-plan.v1.schema.json > $null
+python -m json.tool schemas/synergy.organization.v1.schema.json > $null
+python -m json.tool config/organization.default.json > $null
 python -m json.tool examples/m10/sales-to-file-cognitive-plan.json > $null
+python -m json.tool examples/m11/browser-to-sales-transform-plan.json > $null
 Get-ChildItem plugins -Recurse -Filter plugin.json | ForEach-Object { python -m json.tool $_.FullName > $null }
 python -m py_compile scripts/discover-plugin-surfaces.py scripts/propose-plugin-build.py
 python -m compileall -q sidecars/business-runtime/src sidecars/nexus-bridge/src sidecars/connector-gateway/src
 
-Write-Host "[9/11] M8 static self-build smoke"
+Write-Host "[9/13] M8 static self-build smoke"
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("synergy-m8-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 try {
@@ -64,7 +67,7 @@ finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
 
-Write-Host "[10/11] M9 declarative CLI smoke"
+Write-Host "[10/13] M9 declarative CLI smoke"
 $tmpCli = Join-Path ([System.IO.Path]::GetTempPath()) ("synergy-m9-cli-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $tmpCli | Out-Null
 try {
@@ -102,7 +105,13 @@ finally {
     Remove-Item -Recurse -Force $tmpCli -ErrorAction SilentlyContinue
 }
 
-Write-Host "[11/11] M10 verified cognitive DAG smoke"
+Write-Host "[11/13] M10 verified cognitive DAG smoke"
 cargo run -p open-autopilot -- cognitive-plan-verify --proposal examples/m10/sales-to-file-cognitive-plan.json
 
-Write-Host "SYNERGY_AUTOPILOT_M5_M10_VERIFICATION_PASS"
+Write-Host "[12/13] M11 verified transform DAG smoke"
+cargo run -p open-autopilot -- cognitive-plan-verify --proposal examples/m11/browser-to-sales-transform-plan.json
+
+Write-Host "[13/13] M11 AI organization validation"
+cargo run -p open-autopilot -- org-validate
+
+Write-Host "SYNERGY_AUTOPILOT_M5_M11_VERIFICATION_PASS"
