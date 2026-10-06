@@ -15,9 +15,11 @@ use autopilot_capability_graph::{CapabilityQuery, RepositoryCatalog};
 use autopilot_core::{AgentExecutor, AgentOutcome, Director, DirectorConfig, GoalRequest, PlannedTask, Planner, VerificationOutcome, Verifier};
 use autopilot_delivery::{CiReport, CiState, DeliveryConfig, DeliveryEngine};
 use autopilot_domain::{AgentRole, Capability, Evidence, RiskClass};
-use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, FleetEngine, FleetEngineConfig, GraphGoalEngine, PluginGoalEngine, PluginGoalStep, VerificationCommand};
+use autopilot_engine::{backend_for_provider, AutonomousEngine, EngineConfig, FleetEngine, FleetEngineConfig, GraphGoalEngine, ParallelPluginWorkflowEngine, PluginGoalEngine, PluginGoalStep, VerificationCommand};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::PolicyEngine;
+use autopilot_org::{Organization, OrganizationSpec};
+use autopilot_outcomes::{fingerprint_goal, OutcomeStore};
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
 use autopilot_plugin_builder::{BuildDiscoveryChain, BuildRequest, CandidateStore, FilesystemCliDescriptorDiscovery, FilesystemMcpDiscovery, FilesystemOpenApiDiscovery, PluginBuilder, SandboxQualifier, SelfBuildCoordinator, SelfBuildOutcome, SelfBuildPolicy, SemanticGapDetector};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
@@ -126,6 +128,23 @@ enum Commands {
         #[arg(long, default_value = "native")] runtime: String,
         #[arg(long)] docker_image: Option<String>,
         #[arg(long)] wsl_distro: Option<String>,
+        #[arg(long)] organization: Option<PathBuf>,
+        #[arg(long, default_value = ".autopilot/outcomes.db")] outcome_db: PathBuf,
+        #[arg(long, default_value_t = true)] parallel: bool,
+    },
+    OrgValidate {
+        #[arg(long)] organization: Option<PathBuf>,
+    },
+    OrgRoute {
+        #[arg(long)] capability: String,
+        #[arg(long)] risk: String,
+        #[arg(long)] organization: Option<PathBuf>,
+        #[arg(long)] outcome_db: Option<PathBuf>,
+        #[arg(long)] goal: Option<String>,
+    },
+    OutcomeBest {
+        #[arg(long)] db: PathBuf,
+        #[arg(long)] goal: String,
     },
     AutomationAdd {
         #[arg(long)] db: PathBuf,
@@ -266,6 +285,77 @@ fn initial_plugin_registry() -> Result<PluginRegistry, String> {
     }
     registry.validate_dependencies().map_err(|error| error.to_string())?;
     Ok(registry)
+}
+
+fn load_organization(path: Option<&Path>) -> Result<Organization, String> {
+    let raw = match path {
+        Some(path) => fs::read_to_string(path)
+            .map_err(|error| format!("cannot read organization {}: {error}", path.display()))?,
+        None => include_str!("../../../config/organization.default.json").to_string(),
+    };
+    let spec: OrganizationSpec = serde_json::from_str(&raw)
+        .map_err(|error| format!("invalid organization JSON: {error}"))?;
+    Organization::validate(spec).map_err(|error| error.to_string())
+}
+
+fn parse_risk_class(value: &str) -> Result<RiskClass, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "low" => Ok(RiskClass::Low),
+        "medium" => Ok(RiskClass::Medium),
+        "high" => Ok(RiskClass::High),
+        "critical" => Ok(RiskClass::Critical),
+        other => Err(format!("invalid risk class: {other}")),
+    }
+}
+
+fn assign_ai_employees(
+    steps: &mut [PluginGoalStep],
+    organization: &Organization,
+    outcomes: Option<&OutcomeStore>,
+    goal_fingerprint: &str,
+) -> Result<(), String> {
+    for step in steps {
+        let eligible = organization.eligible_employees(&step.capability, step.risk);
+        if eligible.is_empty() {
+            eprintln!(
+                "org_unassigned step={:?} capability={} risk={:?}; no eligible default AI employee",
+                step.id, step.capability, step.risk
+            );
+            continue;
+        }
+
+        let candidate_keys = eligible.iter().map(|employee| {
+            format!(
+                "employee:{}|{}/{}",
+                employee.id, step.plugin_id, step.capability
+            )
+        }).collect::<Vec<_>>();
+
+        let selected_id = outcomes
+            .map(|store| store.best_route_among(goal_fingerprint, &candidate_keys, 2))
+            .transpose()
+            .map_err(|error| error.to_string())?
+            .flatten()
+            .and_then(|best| {
+                best.route_key.strip_prefix("employee:")
+                    .and_then(|value| value.split_once('|').map(|(employee, _)| employee.to_string()))
+            })
+            .unwrap_or_else(|| eligible[0].id.clone());
+
+        let employee = organization.employee(&selected_id)
+            .ok_or_else(|| format!("outcome routing selected unknown employee: {selected_id}"))?;
+        step.employee_id = Some(employee.id.clone());
+        step.department_id = Some(employee.department_id.clone());
+    }
+    Ok(())
+}
+
+fn open_outcome_store(path: &Path) -> Result<OutcomeStore, String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create outcome directory {}: {error}", parent.display()))?;
+    }
+    OutcomeStore::open(path).map_err(|error| error.to_string())
 }
 
 fn semantic_context_from_json(
