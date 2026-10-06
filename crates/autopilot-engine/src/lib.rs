@@ -423,10 +423,10 @@ impl ParallelPluginWorkflowEngine {
         employee_id: Option<&str>,
     ) -> Result<(), String> {
         let Some(store) = &self.outcomes else { return Ok(()) };
-        let mut record = OutcomeRecord::new(
-            goal_fingerprint,
-            format!("{}/{}", outcome.plugin_id, outcome.capability),
-        );
+        let route_key = employee_id
+            .map(|employee| format!("employee:{employee}|{}/{}", outcome.plugin_id, outcome.capability))
+            .unwrap_or_else(|| format!("plugin:{}/{}", outcome.plugin_id, outcome.capability));
+        let mut record = OutcomeRecord::new(goal_fingerprint, route_key);
         record.employee_id = employee_id.map(str::to_string);
         record.success = outcome.success;
         record.verified = outcome.success;
