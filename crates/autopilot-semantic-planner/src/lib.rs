@@ -1762,6 +1762,8 @@ mod tests {
                 risk:RiskClass::High,
                 requires_approval:true,
                 mapped_core_capabilities:BTreeSet::new(),
+            
+                parallel_safe: false,
             }],
             endpoints:vec![],
             tags:BTreeSet::new(),
@@ -1793,6 +1795,8 @@ mod tests {
                 capability:"email.send".into(),
                 hints:BTreeMap::new(),
             }],
+        
+            bindings: Vec::new(),
         };
         let plan=VerifiedCognitivePlanner::verify(
             &proposal,&registry,&MappingContext::default()
@@ -1829,6 +1833,8 @@ mod tests {
                 capability:"invented.run".into(),
                 hints:BTreeMap::new(),
             }],
+        
+            bindings: Vec::new(),
         };
         assert!(matches!(
             VerifiedCognitivePlanner::verify(
@@ -1853,6 +1859,8 @@ mod tests {
                 risk:RiskClass::Low,
                 requires_approval:false,
                 mapped_core_capabilities:BTreeSet::new(),
+            
+                parallel_safe: false,
             }],
             endpoints:vec![],
             tags:["memory".to_string()].into_iter().collect(),
@@ -1899,6 +1907,8 @@ mod tests {
                     risk:RiskClass::Low,
                     requires_approval:false,
                     mapped_core_capabilities:BTreeSet::new(),
+                
+                    parallel_safe: false,
                 }],
                 endpoints:vec![],
                 tags:[if id=="sales" { "sales".to_string() } else { "email".to_string() }].into_iter().collect(),
