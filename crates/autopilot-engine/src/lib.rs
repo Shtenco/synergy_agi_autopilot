@@ -170,13 +170,11 @@ fn resolve_semantic_plugin_input(value: Value, context: &[PluginStepContext]) ->
             .find(|entry| entry.id.as_deref() == Some(from_step))
             .and_then(|entry| entry.value.get("output"))
             .ok_or_else(|| format!("typed binding source output is unavailable: {from_step}"))?;
-        let transformed;
         let current = if let Some(transform_value) = binding.get("transform").filter(|value| !value.is_null()) {
             let transform: VerifiedTransform = serde_json::from_value(transform_value.clone())
                 .map_err(|error| format!("invalid verified transform in runtime binding: {error}"))?;
-            transformed = transform.apply(source.clone())
-                .map_err(|error| format!("verified transform runtime failure from {from_step}: {error}"))?;
-            &transformed
+            transform.apply(source.clone())
+                .map_err(|error| format!("verified transform runtime failure from {from_step}: {error}"))?
         } else {
             let mut current = source;
             if !from_path.is_empty() {
@@ -185,7 +183,7 @@ fn resolve_semantic_plugin_input(value: Value, context: &[PluginStepContext]) ->
                         .ok_or_else(|| format!("typed binding path not found: {from_step}.{from_path}"))?;
                 }
             }
-            current
+            current.clone()
         };
         let pointer = format!(
             "/properties/{}",
@@ -193,14 +191,14 @@ fn resolve_semantic_plugin_input(value: Value, context: &[PluginStepContext]) ->
         );
         let target_schema = contract.pointer(&pointer)
             .ok_or_else(|| format!("typed binding target is not declared: {to_field}"))?;
-        let errors = JsonContractValidator::validate(target_schema, current);
+        let errors = JsonContractValidator::validate(target_schema, &current);
         if !errors.is_empty() {
             return Err(format!(
                 "typed binding runtime validation failed for {from_step}.{from_path} -> {to_field}: {}",
                 errors.join("; ")
             ));
         }
-        hints.insert(to_field.to_string(), current.clone());
+        hints.insert(to_field.to_string(), current);
     }
 
     let mapping = SemanticArgumentMapper::map(
