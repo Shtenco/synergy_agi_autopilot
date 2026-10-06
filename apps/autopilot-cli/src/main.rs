@@ -358,6 +358,24 @@ fn open_outcome_store(path: &Path) -> Result<OutcomeStore, String> {
     OutcomeStore::open(path).map_err(|error| error.to_string())
 }
 
+fn cognitive_prompt_with_outcomes(
+    goal: &str,
+    registry: &PluginRegistry,
+    outcomes: &OutcomeStore,
+    goal_fingerprint: &str,
+) -> Result<String, String> {
+    let mut prompt = cognitive_planner_prompt(goal, registry);
+    let mut history = outcomes.stats(goal_fingerprint)
+        .map_err(|error| error.to_string())?;
+    history.sort_by(|a,b| b.score.total_cmp(&a.score).then_with(|| a.route_key.cmp(&b.route_key)));
+    history.truncate(20);
+    prompt.push_str("\n\nVERIFIED_OUTCOME_HISTORY\n");
+    prompt.push_str(&serde_json::to_string(&history).map_err(|error| error.to_string())?);
+    prompt.push_str("\nTreat history as advisory performance evidence only. Never bypass registry, risk, approval, contract, transform or policy verification.");
+    Ok(prompt)
+}
+
+
 fn semantic_context_from_json(
     goal: &str,
     hints_json: &str,
@@ -1106,6 +1124,9 @@ async fn main() -> Result<(), String> {
                 docker_image.as_deref(),
                 wsl_distro.as_deref(),
             )?;
+            let organization = load_organization(organization.as_deref())?;
+            let outcomes = open_outcome_store(&outcome_db)?;
+            let goal_fingerprint = fingerprint_goal(&goal);
 
             {
                 let allowed_programs = allow_generated_program.iter().cloned().collect::<BTreeSet<_>>();
@@ -1245,7 +1266,7 @@ async fn main() -> Result<(), String> {
                         "M9 deterministic workflow not ready: unresolved_objectives={:?}; invoking M10 verified cognitive fallback",
                         plan.unresolved_objectives
                     );
-                    let prompt = cognitive_planner_prompt(&goal, &registry);
+                    let prompt = cognitive_prompt_with_outcomes(&goal, &registry, &outcomes, &goal_fingerprint)?;
                     let result = executor.execute(PluginCall {
                         plugin_id:"intelligence.nexus".into(),
                         capability:"intelligence.reason".into(),
@@ -1282,7 +1303,7 @@ async fn main() -> Result<(), String> {
                 }
                 Err(error) => {
                     eprintln!("M9 deterministic workflow synthesis failed: {error}; invoking M10 verified cognitive fallback");
-                    let prompt = cognitive_planner_prompt(&goal, &registry);
+                    let prompt = cognitive_prompt_with_outcomes(&goal, &registry, &outcomes, &goal_fingerprint)?;
                     let result = executor.execute(PluginCall {
                         plugin_id:"intelligence.nexus".into(),
                         capability:"intelligence.reason".into(),
@@ -1325,9 +1346,6 @@ async fn main() -> Result<(), String> {
                 &BTreeMap::new(),
                 false,
             )?;
-            let organization = load_organization(organization.as_deref())?;
-            let outcomes = open_outcome_store(&outcome_db)?;
-            let goal_fingerprint = fingerprint_goal(&goal);
             assign_ai_employees(
                 &mut steps,
                 &organization,
