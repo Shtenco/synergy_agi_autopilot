@@ -505,3 +505,56 @@ Canonical qualification:
 ```
 
 The verifier now covers M5 through M11.
+
+
+## M12 — Persistent AI Workforce + Department Autonomy
+
+M12 turns M11 employees into durable digital workers.
+
+```text
+AI Employee
+├─ persistent runtime state
+├─ personal/department inbox
+├─ durable leases + recovery
+├─ NEXUS memory namespace
+├─ skills
+├─ KPIs
+├─ initiatives
+├─ workspace
+├─ node binding
+├─ model profile
+├─ M6 budget/approval authority
+├─ manager / supervisor escalation
+├─ M6 schedule links
+└─ long-term performance history
+```
+
+Company cadence:
+
+```text
+maintenance
+   ↓
+CEO / leadership
+   ↓
+departments in parallel
+   ↓
+employees
+   ↓
+PluginExecutor
+   ↓
+verified result + memory + performance
+```
+
+Important boundary: current P7 Agent Fabric supports local registration/scheduling/leases, but P7.4 encrypted remote delegation/result return is still incomplete. M12 therefore stores cross-device node bindings now and fails closed for non-local execution rather than pretending the transport exists.
+
+Canonical docs:
+
+`docs/M12_PERSISTENT_AI_WORKFORCE_STATUS.md`
+
+Canonical verification:
+
+```powershell
+.\scripts\verify-autopilot.ps1
+```
+
+The verifier now covers M5 through M12.
