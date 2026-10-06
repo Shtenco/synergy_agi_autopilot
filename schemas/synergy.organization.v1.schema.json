@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synergy.local/schemas/synergy.organization.v1.schema.json",
+  "title": "SYNERGY AI Organization v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "company_id",
+    "company_name",
+    "departments",
+    "employees"
+  ],
+  "properties": {
+    "schema": {
+      "const": "synergy.organization.v1"
+    },
+    "company_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "company_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "departments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "mission",
+          "manager_employee_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mission": {
+            "type": "string",
+            "minLength": 1
+          },
+          "manager_employee_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "workspace": {
+            "type": "string"
+          },
+          "memory_namespace": {
+            "type": "string"
+          },
+          "monthly_budget_microusd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "allowed_capabilities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "employees": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "title",
+          "department_id",
+          "max_risk"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "department_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "supervisor_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "tools": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "max_risk": {
+            "enum": [
+              "Low",
+              "Medium",
+              "High",
+              "Critical"
+            ]
+          },
+          "model_policy": {
+            "type": "string"
+          },
+          "device_policy": {
+            "type": "string"
+          },
+          "workspace": {
+            "type": "string"
+          },
+          "memory_namespace": {
+            "type": "string"
+          },
+          "autonomous": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
