@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use async_trait::async_trait;
 use autopilot_audit::AuditStore;
@@ -15,6 +16,7 @@ use autopilot_fleet::{FleetScheduler, FleetTask};
 use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Termination};
 use autopilot_policy::{PolicyDecision, PolicyEngine};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor};
+use autopilot_outcomes::{OutcomeRecord, OutcomeStore};
 use autopilot_router::{ModelCandidate, ModelRouter, RoutingProfile};
 use autopilot_runtime::{CommandSpec, ExecutionProfile, RuntimeAdapter};
 use autopilot_semantic_planner::{JsonContractValidator, MappingContext, SemanticArgumentMapper};
@@ -23,6 +25,7 @@ use autopilot_verification::{VerificationCheck, VerificationPipeline};
 use autopilot_workspace::WorkspaceManager;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use tokio::task::JoinSet;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PluginGoalStep {
@@ -307,6 +310,238 @@ impl PluginGoalEngine {
     pub async fn run(&self, goal: impl Into<String>) -> Result<GoalRunSummary, DirectorError> {
         self.director.run_goal(GoalRequest::new(goal)).await
     }
+}
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ParallelStepOutcome {
+    pub step_id: String,
+    pub plugin_id: String,
+    pub capability: String,
+    pub success: bool,
+    pub latency_ms: u64,
+    pub result: Option<Value>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ParallelWorkflowSummary {
+    pub success: bool,
+    pub layers_executed: usize,
+    pub outcomes: Vec<ParallelStepOutcome>,
+}
+
+pub struct ParallelPluginWorkflowEngine {
+    executor: Arc<PluginExecutor>,
+    audit: Arc<dyn AuditStore>,
+    outcomes: Option<OutcomeStore>,
+}
+
+impl ParallelPluginWorkflowEngine {
+    pub fn new(
+        executor: Arc<PluginExecutor>,
+        audit: Arc<dyn AuditStore>,
+        outcomes: Option<OutcomeStore>,
+    ) -> Self {
+        Self { executor, audit, outcomes }
+    }
+
+    fn is_parallel_safe(&self, step: &PluginGoalStep) -> bool {
+        self.executor.registry()
+            .get(&step.plugin_id)
+            .and_then(|manifest| manifest.capability(&step.capability))
+            .is_some_and(|capability| capability.parallel_safe && !capability.requires_approval)
+    }
+
+    fn validate_layers(
+        steps: &[PluginGoalStep],
+        layers: &[Vec<String>],
+    ) -> Result<(), String> {
+        let ids = steps.iter().map(|step| {
+            step.id.clone().ok_or_else(|| "parallel workflow requires stable step ids".to_string())
+        }).collect::<Result<BTreeSet<_>,_>>()?;
+        let layered = layers.iter().flatten().cloned().collect::<Vec<_>>();
+        let layered_set = layered.iter().cloned().collect::<BTreeSet<_>>();
+        if layered.len() != layered_set.len() {
+            return Err("parallel workflow execution layers contain duplicate step ids".into());
+        }
+        if ids != layered_set {
+            return Err(format!(
+                "parallel workflow execution layers do not exactly cover workflow steps: steps={ids:?} layers={layered_set:?}"
+            ));
+        }
+        Ok(())
+    }
+
+    async fn execute_one(
+        executor: Arc<PluginExecutor>,
+        step: PluginGoalStep,
+        context: Vec<PluginStepContext>,
+    ) -> ParallelStepOutcome {
+        let step_id = step.id.clone().unwrap_or_else(|| "unknown".into());
+        let started = Instant::now();
+        let prepared = prepare_plugin_step_call(&step, &context);
+        let result = match prepared {
+            Ok(call) => executor.execute(call).await.map_err(|error| error.to_string()),
+            Err(error) => Err(error),
+        };
+        let latency_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+        match result {
+            Ok(result) => ParallelStepOutcome {
+                step_id,
+                plugin_id: step.plugin_id,
+                capability: step.capability,
+                success: true,
+                latency_ms,
+                result: serde_json::to_value(result).ok(),
+                error: None,
+            },
+            Err(error) => ParallelStepOutcome {
+                step_id,
+                plugin_id: step.plugin_id,
+                capability: step.capability,
+                success: false,
+                latency_ms,
+                result: None,
+                error: Some(error),
+            },
+        }
+    }
+
+    async fn record_outcome(
+        &self,
+        goal_fingerprint: &str,
+        outcome: &ParallelStepOutcome,
+    ) -> Result<(), String> {
+        let Some(store) = &self.outcomes else { return Ok(()) };
+        let mut record = OutcomeRecord::new(
+            goal_fingerprint,
+            format!("{}/{}", outcome.plugin_id, outcome.capability),
+        );
+        record.success = outcome.success;
+        record.verified = outcome.success;
+        record.latency_ms = outcome.latency_ms;
+        record.quality_score = if outcome.success { 1.0 } else { 0.0 };
+        record.error_class = outcome.error.as_ref().map(|_| "plugin_execution".into());
+        store.record(&record).map_err(|error| error.to_string())
+    }
+
+    pub async fn run(
+        &self,
+        goal_fingerprint: &str,
+        steps: Vec<PluginGoalStep>,
+        execution_layers: Vec<Vec<String>>,
+    ) -> Result<ParallelWorkflowSummary, String> {
+        Self::validate_layers(&steps, &execution_layers)?;
+        let by_id = steps.into_iter().map(|step| {
+            let id = step.id.clone().expect("validated step id");
+            (id, step)
+        }).collect::<std::collections::BTreeMap<_,_>>();
+
+        let correlation = CorrelationId::new();
+        let mut context = Vec::<PluginStepContext>::new();
+        let mut all_outcomes = Vec::new();
+
+        for (layer_index, layer) in execution_layers.iter().enumerate() {
+            let snapshot = context.clone();
+            let mut safe = Vec::new();
+            let mut exclusive = Vec::new();
+            for step_id in layer {
+                let step = by_id.get(step_id)
+                    .ok_or_else(|| format!("unknown workflow step in layer: {step_id}"))?
+                    .clone();
+                if self.is_parallel_safe(&step) { safe.push(step); }
+                else { exclusive.push(step); }
+            }
+
+            self.audit.append(AuditEvent::new(
+                correlation,
+                "ParallelDAG",
+                format!("layer-{layer_index}-start"),
+                RiskClass::Low,
+                format!("parallel_safe={} exclusive={}", safe.len(), exclusive.len()),
+            )).await.map_err(|error| error.to_string())?;
+
+            let mut layer_outcomes = std::collections::BTreeMap::<String, ParallelStepOutcome>::new();
+            let mut jobs = JoinSet::new();
+            for step in safe {
+                let executor = self.executor.clone();
+                let snapshot = snapshot.clone();
+                jobs.spawn(async move {
+                    Self::execute_one(executor, step, snapshot).await
+                });
+            }
+            while let Some(joined) = jobs.join_next().await {
+                let outcome = joined.map_err(|error| format!("parallel plugin task join failure: {error}"))?;
+                layer_outcomes.insert(outcome.step_id.clone(), outcome);
+            }
+
+            for step in exclusive {
+                let outcome = Self::execute_one(
+                    self.executor.clone(),
+                    step,
+                    snapshot.clone(),
+                ).await;
+                layer_outcomes.insert(outcome.step_id.clone(), outcome);
+            }
+
+            for step_id in layer {
+                let outcome = layer_outcomes.remove(step_id)
+                    .ok_or_else(|| format!("workflow step produced no outcome: {step_id}"))?;
+                self.record_outcome(goal_fingerprint, &outcome).await?;
+                if !outcome.success {
+                    self.audit.append(AuditEvent::new(
+                        correlation,
+                        format!("step:{step_id}"),
+                        "failed",
+                        RiskClass::Low,
+                        outcome.error.clone().unwrap_or_else(|| "unknown".into()),
+                    )).await.map_err(|error| error.to_string())?;
+                    all_outcomes.push(outcome);
+                    return Ok(ParallelWorkflowSummary {
+                        success: false,
+                        layers_executed: layer_index + 1,
+                        outcomes: all_outcomes,
+                    });
+                }
+                let value = outcome.result.clone()
+                    .ok_or_else(|| format!("successful step has no serialized result: {step_id}"))?;
+                context.push(PluginStepContext {
+                    id: Some(step_id.clone()),
+                    value,
+                });
+                all_outcomes.push(outcome);
+            }
+
+            self.audit.append(AuditEvent::new(
+                correlation,
+                "ParallelDAG",
+                format!("layer-{layer_index}-finish"),
+                RiskClass::Low,
+                "passed",
+            )).await.map_err(|error| error.to_string())?;
+        }
+
+        Ok(ParallelWorkflowSummary {
+            success: true,
+            layers_executed: execution_layers.len(),
+            outcomes: all_outcomes,
+        })
+    }
+}
+
+fn prepare_plugin_step_call(
+    step: &PluginGoalStep,
+    context: &[PluginStepContext],
+) -> Result<PluginCall, String> {
+    let resolved = resolve_plugin_refs(step.input.clone(), context)?;
+    let input = resolve_semantic_plugin_input(resolved, context)?;
+    Ok(PluginCall {
+        plugin_id: step.plugin_id.clone(),
+        capability: step.capability.clone(),
+        input,
+        approved: step.approved,
+    })
 }
 
 pub struct CapabilityGraphPlanner {
