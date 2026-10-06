@@ -1,0 +1,37 @@
+{
+  "schema": "synergy.workforce.v1",
+  "defaults": {
+    "lease_seconds": 300,
+    "offline_after_seconds": 180,
+    "max_attempts": 3,
+    "escalation_after_seconds": 900,
+    "min_skill_level": 0.5,
+    "department_cycle_max_items": 64
+  },
+  "department_overrides": {
+    "leadership": {
+      "max_attempts": 2,
+      "escalation_after_seconds": 600
+    },
+    "sales": {
+      "lease_seconds": 240,
+      "max_attempts": 3,
+      "escalation_after_seconds": 600
+    },
+    "engineering": {
+      "lease_seconds": 1200,
+      "max_attempts": 3,
+      "escalation_after_seconds": 1800
+    },
+    "quality": {
+      "lease_seconds": 600,
+      "max_attempts": 2,
+      "escalation_after_seconds": 900
+    },
+    "infra": {
+      "lease_seconds": 600,
+      "max_attempts": 2,
+      "escalation_after_seconds": 600
+    }
+  }
+}
