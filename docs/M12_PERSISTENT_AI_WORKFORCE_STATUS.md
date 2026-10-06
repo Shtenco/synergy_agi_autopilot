@@ -241,9 +241,18 @@ For persistent employees M12 is stricter than one-shot execution:
 
 - approval-required capability + no approval ID -> fail/retry;
 - approval ID + no persistent control-plane DB -> fail/retry;
+- approval must be in M6 `Approved` state;
+- approval action must match the exact plugin and capability;
+- workforce approval must match the exact `work_item_id`;
 - non-zero budget reservation + no persistent control-plane DB -> fail/retry.
 
-Therefore a long-lived worker cannot treat an arbitrary approval string as authority.
+This closes cross-task approval replay: an approval for one durable task cannot authorize another task merely because both use the same capability.
+
+Canonical operator flow:
+
+`workforce-enqueue -> workforce-approval-request -> approval-decide -> workforce-run/company-cycle`
+
+`workforce-approval-request` creates the M6 approval from the durable task record and atomically stores the resulting approval ID back on that work item.
 
 ## 12. Personal Computer / Node
 
@@ -333,6 +342,7 @@ Implemented commands include:
 - `workforce-node-register`
 - `workforce-bind-node`
 - `workforce-heartbeat`
+- `workforce-approval-request`
 - `workforce-skill-set`
 - `workforce-kpi-set`
 - `workforce-initiative-add`
@@ -359,6 +369,8 @@ M12 qualification includes:
 - organization bootstrap;
 - durable employee runtime;
 - skill + node gated lease;
+- exact work-item approval scoping / replay rejection;
+- durable approval attachment;
 - escalation to supervisor;
 - employee performance/KPI score;
 - workforce schema validation;
