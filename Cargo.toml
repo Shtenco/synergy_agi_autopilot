@@ -24,6 +24,7 @@ members = [
   "crates/autopilot-transform",
   "crates/autopilot-outcomes",
   "crates/autopilot-org",
+  "crates/autopilot-workforce",
   "crates/autopilot-automation",
   "crates/autopilot-automation-runtime",
   "crates/autopilot-secrets",
