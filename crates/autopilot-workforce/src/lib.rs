@@ -995,6 +995,21 @@ mod tests {
     }
 
     #[test]
+    fn work_item_persists_attached_approval_id() {
+        let store=WorkforceStore::open_in_memory().unwrap();
+        let item=WorkItem::new(
+          "engineering","cto","run approved command","computer.local.commander","computer.run_command",
+          serde_json::json!({"program":"cargo","args":["test"]}),RiskClass::High
+        );
+        let id=item.id;
+        store.enqueue(&item).unwrap();
+        let approval=Uuid::new_v4();
+        store.attach_approval(id,approval).unwrap();
+        let loaded=store.get_work_item(id).unwrap().unwrap();
+        assert_eq!(loaded.approval_id.as_deref(),Some(approval.to_string().as_str()));
+    }
+
+    #[test]
     fn organization_seeds_persistent_employee_runtime() {
         let store=WorkforceStore::open_in_memory().unwrap();
         let org=org();
