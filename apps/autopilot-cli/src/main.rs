@@ -1726,6 +1726,7 @@ async fn main() -> Result<(), String> {
                 })
             );
             approvals.request_approval(&request).map_err(|e|e.to_string())?;
+            store.attach_approval(item.id,request.id).map_err(|e|e.to_string())?;
             println!("{}",serde_json::to_string_pretty(&request).map_err(|e|e.to_string())?);
         },
         Commands::WorkforceSkillSet { db,employee,skill,level,evidence_count } => {
