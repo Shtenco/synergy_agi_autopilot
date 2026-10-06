@@ -464,6 +464,9 @@ fn workflow_to_plugin_steps(
             input,
             approved: approved_steps.contains(&step.id),
             risk: step.risk,
+        
+            employee_id: None,
+        department_id: None,
         });
     }
     Ok(steps)
@@ -485,6 +488,9 @@ fn e2e_sales_steps(
             input: serde_json::json!({"query":format!("{lead_title} {product}"),"limit":10}),
             approved: false,
             risk: RiskClass::Low,
+        
+            employee_id: None,
+        department_id: None,
         },
         PluginGoalStep {
             id: Some("browser".into()),
@@ -501,6 +507,9 @@ fn e2e_sales_steps(
             }),
             approved: false,
             risk: RiskClass::Medium,
+        
+            employee_id: None,
+        department_id: None,
         },
         PluginGoalStep {
             id: Some("opportunity".into()),
@@ -521,6 +530,9 @@ fn e2e_sales_steps(
             }),
             approved: false,
             risk: RiskClass::Low,
+        
+            employee_id: None,
+        department_id: None,
         },
         PluginGoalStep {
             id: Some("sales".into()),
@@ -533,6 +545,9 @@ fn e2e_sales_steps(
             }),
             approved: false,
             risk: RiskClass::Low,
+        
+            employee_id: None,
+        department_id: None,
         },
         PluginGoalStep {
             id: Some("smm".into()),
@@ -548,6 +563,9 @@ fn e2e_sales_steps(
             }),
             approved: false,
             risk: RiskClass::Low,
+        
+            employee_id: None,
+        department_id: None,
         },
         PluginGoalStep {
             id: Some("artifact".into()),
@@ -561,6 +579,9 @@ fn e2e_sales_steps(
             }),
             approved: false,
             risk: RiskClass::Medium,
+        
+            employee_id: None,
+        department_id: None,
         },
         PluginGoalStep {
             id: Some("worker".into()),
@@ -585,6 +606,9 @@ fn e2e_sales_steps(
             }),
             approved: false,
             risk: RiskClass::Medium,
+        
+            employee_id: None,
+        department_id: None,
         },
     ];
 
@@ -597,6 +621,9 @@ fn e2e_sales_steps(
             input: serde_json::json!({"path":"."}),
             approved: false,
             risk: RiskClass::Low,
+        
+            employee_id: None,
+        department_id: None,
         });
     }
 
@@ -621,6 +648,9 @@ fn e2e_sales_steps(
         input: serde_json::json!({"required":required,"evidence":evidence}),
         approved: false,
         risk: RiskClass::Low,
+    
+        employee_id: None,
+        department_id: None,
     });
     steps
 }
