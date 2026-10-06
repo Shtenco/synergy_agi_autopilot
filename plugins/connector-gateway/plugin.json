@@ -12,7 +12,8 @@
       "requires_approval": false,
       "mapped_core_capabilities": [
         "NetworkAccess"
-      ]
+      ],
+      "parallel_safe": false
     },
     {
       "name": "openapi.call",
@@ -20,7 +21,8 @@
       "requires_approval": false,
       "mapped_core_capabilities": [
         "NetworkAccess"
-      ]
+      ],
+      "parallel_safe": false
     },
     {
       "name": "database.query",
@@ -28,19 +30,22 @@
       "requires_approval": false,
       "mapped_core_capabilities": [
         "ReadWorkspace"
-      ]
+      ],
+      "parallel_safe": true
     },
     {
       "name": "queue.publish",
       "risk": "Medium",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": false
     },
     {
       "name": "queue.consume",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     }
   ],
   "endpoints": [
