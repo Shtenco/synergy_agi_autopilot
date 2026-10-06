@@ -1066,7 +1066,7 @@ async fn main() -> Result<(), String> {
         Commands::UniversalGoal {
             goal, discovery_root, base_url, quarantine, generated_plugins,
             max_routes: _, workspace, control_db, allow_env, allow_generated_program,
-            runtime, docker_image, wsl_distro
+            runtime, docker_image, wsl_distro, organization, outcome_db, parallel
         } => {
             let mut graph = initial_capability_graph()?;
             let mut registry = initial_plugin_registry()?;
@@ -1289,20 +1289,119 @@ async fn main() -> Result<(), String> {
                     step.id, step.plugin_id, step.capability, step.id
                 ));
             }
-            let steps = workflow_to_plugin_steps(
+            let mut steps = workflow_to_plugin_steps(
                 &plan,
                 &BTreeSet::new(),
                 &BTreeMap::new(),
                 false,
             )?;
-            let engine = PluginGoalEngine::new(audit.clone(), executor, steps, 0);
-            let summary = engine.run(goal.clone()).await.map_err(|error| error.to_string())?;
+            let organization = load_organization(organization.as_deref())?;
+            let outcomes = open_outcome_store(&outcome_db)?;
+            let goal_fingerprint = fingerprint_goal(&goal);
+            assign_ai_employees(
+                &mut steps,
+                &organization,
+                Some(&outcomes),
+                &goal_fingerprint,
+            )?;
+
             println!(
-                "UNIVERSAL_GOAL\nfinal_state={:?}\nevidence={}\naudit_events={}\nblocked_by_policy={}",
-                summary.final_state,
-                summary.evidence.len(),
-                audit.list_by_correlation(summary.correlation_id).await?.len(),
-                summary.blocked_by_policy,
+                "AI_STAFFING\n{}",
+                serde_json::to_string_pretty(
+                    &steps.iter().map(|step| serde_json::json!({
+                        "step_id":step.id,
+                        "plugin_id":step.plugin_id,
+                        "capability":step.capability,
+                        "employee_id":step.employee_id,
+                        "department_id":step.department_id,
+                    })).collect::<Vec<_>>()
+                ).map_err(|error| error.to_string())?
+            );
+
+            if parallel {
+                let engine = ParallelPluginWorkflowEngine::new(
+                    executor,
+                    audit.clone(),
+                    Some(outcomes),
+                );
+                let summary = engine.run(
+                    &goal_fingerprint,
+                    steps,
+                    plan.execution_layers.clone(),
+                ).await?;
+                println!(
+                    "UNIVERSAL_GOAL_M11\nsuccess={}\nlayers_executed={}\noutcomes={}",
+                    summary.success,
+                    summary.layers_executed,
+                    serde_json::to_string_pretty(&summary.outcomes).map_err(|error| error.to_string())?,
+                );
+                if !summary.success {
+                    return Err("M11 parallel verified workflow failed".into());
+                }
+            } else {
+                let engine = PluginGoalEngine::new(audit.clone(), executor, steps, 0);
+                let summary = engine.run(goal.clone()).await.map_err(|error| error.to_string())?;
+                println!(
+                    "UNIVERSAL_GOAL\nfinal_state={:?}\nevidence={}\naudit_events={}\nblocked_by_policy={}",
+                    summary.final_state,
+                    summary.evidence.len(),
+                    audit.list_by_correlation(summary.correlation_id).await?.len(),
+                    summary.blocked_by_policy,
+                );
+            }
+        },
+        Commands::OrgValidate { organization } => {
+            let org = load_organization(organization.as_deref())?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(org.spec()).map_err(|error| error.to_string())?
+            );
+        },
+        Commands::OrgRoute { capability, risk, organization, outcome_db, goal } => {
+            let org = load_organization(organization.as_deref())?;
+            let risk = parse_risk_class(&risk)?;
+            let eligible = org.eligible_employees(&capability, risk);
+            let fingerprint = goal.as_deref().map(fingerprint_goal);
+            let store = outcome_db.as_deref().map(open_outcome_store).transpose()?;
+            let candidate_keys = eligible.iter().map(|employee| {
+                format!("employee:{}|*/{}", employee.id, capability)
+            }).collect::<Vec<_>>();
+
+            let history = match (&store, &fingerprint) {
+                (Some(store), Some(fingerprint)) => Some(
+                    store.stats(fingerprint).map_err(|error| error.to_string())?
+                ),
+                _ => None,
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "capability":capability,
+                    "risk":risk,
+                    "goal_fingerprint":fingerprint,
+                    "eligible":eligible.iter().map(|employee| serde_json::json!({
+                        "employee_id":employee.id,
+                        "name":employee.name,
+                        "title":employee.title,
+                        "department_id":employee.department_id,
+                        "model_policy":employee.model_policy,
+                        "device_policy":employee.device_policy
+                    })).collect::<Vec<_>>(),
+                    "history":history,
+                    "candidate_pattern_keys":candidate_keys
+                })).map_err(|error| error.to_string())?
+            );
+        },
+        Commands::OutcomeBest { db, goal } => {
+            let store = open_outcome_store(&db)?;
+            let fingerprint = fingerprint_goal(&goal);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "goal_fingerprint":fingerprint,
+                    "best":store.best_route(&fingerprint,2).map_err(|error| error.to_string())?,
+                    "stats":store.stats(&fingerprint).map_err(|error| error.to_string())?
+                })).map_err(|error| error.to_string())?
             );
         },
         Commands::AutomationAdd { db, name, goal, trigger_json } => {
