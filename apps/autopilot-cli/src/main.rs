@@ -20,6 +20,7 @@ use autopilot_harness::{AgentHarness, BackendKind, BackendRegistry, RunSpec, Ter
 use autopilot_policy::PolicyEngine;
 use autopilot_org::{Organization, OrganizationSpec};
 use autopilot_outcomes::{fingerprint_goal, OutcomeStore};
+use autopilot_workforce::{WorkforceConfig, WorkforceExecutor, WorkforceNode, WorkforceStore, WorkItem};
 use autopilot_plugins::{parse_manifest_json, PluginRegistry};
 use autopilot_plugin_builder::{BuildDiscoveryChain, BuildRequest, CandidateStore, FilesystemCliDescriptorDiscovery, FilesystemMcpDiscovery, FilesystemOpenApiDiscovery, PluginBuilder, SandboxQualifier, SelfBuildCoordinator, SelfBuildOutcome, SelfBuildPolicy, SemanticGapDetector};
 use autopilot_plugin_runtime::{PluginCall, PluginExecutor, PluginRuntimeConfig};
@@ -148,6 +149,71 @@ enum Commands {
     OutcomeBest {
         #[arg(long)] db: PathBuf,
         #[arg(long)] goal: String,
+    },
+    WorkforceInit {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] organization: Option<PathBuf>,
+    },
+    WorkforceStatus {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+    },
+    WorkforceNodeRegister {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] node_id: String,
+        #[arg(long)] kind: String,
+        #[arg(long)] endpoint: String,
+        #[arg(long = "capability")] capabilities: Vec<String>,
+        #[arg(long, default_value_t = 1000)] cpu_millis: u64,
+        #[arg(long, default_value_t = 1024)] memory_mib: u64,
+    },
+    WorkforceBindNode {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] employee: String,
+        #[arg(long)] node_id: String,
+    },
+    WorkforceEnqueue {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] department: String,
+        #[arg(long)] created_by: String,
+        #[arg(long)] goal: String,
+        #[arg(long)] plugin: String,
+        #[arg(long)] capability: String,
+        #[arg(long, default_value = "{}")] input_json: String,
+        #[arg(long, default_value = "low")] risk: String,
+        #[arg(long)] employee: Option<String>,
+        #[arg(long, default_value_t = 0)] priority: i64,
+        #[arg(long)] budget_id: Option<String>,
+        #[arg(long, default_value_t = 0)] budget_microusd: i64,
+        #[arg(long)] approval_id: Option<String>,
+        #[arg(long = "skill")] skills: Vec<String>,
+        #[arg(long = "tool")] tools: Vec<String>,
+    },
+    WorkforceRun {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] employee: String,
+        #[arg(long, default_value = "local-workforce")] owner: String,
+        #[arg(long)] organization: Option<PathBuf>,
+        #[arg(long, default_value = "config/workforce.default.json")] workforce_config: PathBuf,
+        #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long)] control_db: Option<PathBuf>,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
+        #[arg(long = "allow-generated-program")] allow_generated_program: Vec<String>,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long)] wsl_distro: Option<String>,
+    },
+    WorkforceMaintain {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] organization: Option<PathBuf>,
+        #[arg(long, default_value = "config/workforce.default.json")] workforce_config: PathBuf,
+    },
+    WorkforceSyncSwarm {
+        #[arg(long)] organization: Option<PathBuf>,
+        #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long)] wsl_distro: Option<String>,
     },
     AutomationAdd {
         #[arg(long)] db: PathBuf,
@@ -363,6 +429,65 @@ fn open_outcome_store(path: &Path) -> Result<OutcomeStore, String> {
             .map_err(|error| format!("cannot create outcome directory {}: {error}", parent.display()))?;
     }
     OutcomeStore::open(path).map_err(|error| error.to_string())
+}
+
+fn load_workforce_config(path: &Path) -> Result<WorkforceConfig, String> {
+    let raw = fs::read_to_string(path)
+        .or_else(|_| {
+            if path == Path::new("config/workforce.default.json") {
+                Ok(include_str!("../../../config/workforce.default.json").to_string())
+            } else {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "workforce config not found"))
+            }
+        })
+        .map_err(|error| format!("cannot read workforce config {}: {error}", path.display()))?;
+    let config: WorkforceConfig = serde_json::from_str(&raw)
+        .map_err(|error| format!("invalid workforce config: {error}"))?;
+    if config.schema != "synergy.workforce.v1" {
+        return Err(format!("unsupported workforce schema: {}", config.schema));
+    }
+    Ok(config)
+}
+
+fn parse_skill_requirements(values: &[String]) -> Result<BTreeMap<String,f64>, String> {
+    let mut out=BTreeMap::new();
+    for value in values {
+        let (skill,level)=value.split_once('=')
+            .ok_or_else(||format!("--skill must use skill=level syntax: {value}"))?;
+        let level:f64=level.parse().map_err(|_|format!("invalid skill level: {value}"))?;
+        if !(0.0..=1.0).contains(&level) { return Err(format!("skill level must be 0..1: {value}")); }
+        out.insert(skill.to_string(),level);
+    }
+    Ok(out)
+}
+
+fn configured_plugin_executor(
+    workspace: Option<PathBuf>,
+    control_db: Option<PathBuf>,
+    allow_env: &[String],
+    allow_generated_program: &[String],
+    runtime: &str,
+    docker_image: Option<&str>,
+    wsl_distro: Option<&str>,
+) -> Result<Arc<PluginExecutor>, String> {
+    let registry=initial_plugin_registry()?;
+    let execution_runtime=build_plugin_runtime(runtime,workspace.as_deref(),docker_image,wsl_distro)?;
+    let mut config=PluginRuntimeConfig::default();
+    config.local_workspace=workspace;
+    config.control_plane_db=control_db;
+    config.generated_program_allowlist=allow_generated_program.iter().cloned().collect();
+    config.timeout_ms=Some(120_000);
+    config.bearer_token_env.insert("business.capability.runtime".into(),"AUTOPILOT_API_TOKEN".into());
+    config.bearer_token_env.insert("intelligence.nexus".into(),"NEXUS_BRIDGE_TOKEN".into());
+    config.bearer_token_env.insert("business.auto-company".into(),"SYNERGY_API_TOKEN".into());
+    config.bearer_token_env.insert("connector.gateway".into(),"CONNECTOR_GATEWAY_TOKEN".into());
+    config.bearer_token_env.insert("capability.email".into(),"CONNECTOR_GATEWAY_TOKEN".into());
+    config.bearer_token_env.insert("capability.calendar".into(),"CONNECTOR_GATEWAY_TOKEN".into());
+    config.bearer_token_env.insert("capability.crm".into(),"CONNECTOR_GATEWAY_TOKEN".into());
+    for plugin_id in registry.list().map(|manifest|manifest.id.clone()).collect::<Vec<_>>() {
+        if !allow_env.is_empty() { config.env_allowlist.insert(plugin_id,allow_env.to_vec()); }
+    }
+    Ok(Arc::new(PluginExecutor::new(registry,PolicyEngine::default(),execution_runtime,config)))
 }
 
 fn cognitive_prompt_with_outcomes(
@@ -1466,6 +1591,87 @@ async fn main() -> Result<(), String> {
                     "stats":store.stats(&fingerprint).map_err(|error| error.to_string())?
                 })).map_err(|error| error.to_string())?
             );
+        },
+        Commands::WorkforceInit { db, organization } => {
+            if let Some(parent)=db.parent(){fs::create_dir_all(parent).map_err(|e|e.to_string())?;}
+            let org=load_organization(organization.as_deref())?;
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            let count=store.seed_organization(&org).map_err(|e|e.to_string())?;
+            println!("workforce_seeded={}\ndb={}",count,db.display());
+        },
+        Commands::WorkforceStatus { db } => {
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&serde_json::json!({
+              "employees":store.list_employee_states().map_err(|e|e.to_string())?,
+              "nodes":store.list_nodes().map_err(|e|e.to_string())?
+            })).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceNodeRegister { db,node_id,kind,endpoint,capabilities,cpu_millis,memory_mib } => {
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            let node=WorkforceNode{
+              node_id,kind,endpoint,capabilities:capabilities.into_iter().collect(),
+              cpu_millis,memory_mib,online:true,last_heartbeat:Utc::now()
+            };
+            store.register_node(&node).map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&node).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceBindNode { db,employee,node_id } => {
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            store.bind_employee_node(&employee,&node_id).map_err(|e|e.to_string())?;
+            println!("bound_employee={}\nnode_id={}",employee,node_id);
+        },
+        Commands::WorkforceEnqueue { db,department,created_by,goal,plugin,capability,input_json,risk,employee,priority,budget_id,budget_microusd,approval_id,skills,tools } => {
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            let input:serde_json::Value=serde_json::from_str(&input_json).map_err(|e|format!("invalid --input-json: {e}"))?;
+            let mut item=WorkItem::new(department,created_by,goal,plugin,capability,input,parse_risk_class(&risk)?);
+            item.assigned_employee_id=employee;
+            item.priority=priority;
+            item.budget_id=budget_id;
+            item.budget_microusd=budget_microusd.max(0);
+            item.approval_id=approval_id;
+            item.required_skills=parse_skill_requirements(&skills)?;
+            item.required_tools=tools.into_iter().collect();
+            store.enqueue(&item).map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&item).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceRun { db,employee,owner,organization,workforce_config,workspace,control_db,allow_env,allow_generated_program,runtime,docker_image,wsl_distro } => {
+            let org=Arc::new(load_organization(organization.as_deref())?);
+            let config=load_workforce_config(&workforce_config)?;
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            store.seed_organization(&org).map_err(|e|e.to_string())?;
+            let executor=configured_plugin_executor(workspace,control_db,&allow_env,&allow_generated_program,&runtime,docker_image.as_deref(),wsl_distro.as_deref())?;
+            let workforce=WorkforceExecutor::new(store,org,executor,config);
+            let result=workforce.run_employee_once(&employee,&owner).await.map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&result).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceMaintain { db,organization,workforce_config } => {
+            let org=Arc::new(load_organization(organization.as_deref())?);
+            let config=load_workforce_config(&workforce_config)?;
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            store.seed_organization(&org).map_err(|e|e.to_string())?;
+            let dummy=configured_plugin_executor(None,None,&[],&[],"native",None,None)?;
+            let workforce=WorkforceExecutor::new(store,org,dummy,config);
+            let report=workforce.maintain(Utc::now()).map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&report).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceSyncSwarm { organization,workspace,allow_env,runtime,docker_image,wsl_distro } => {
+            let org=load_organization(organization.as_deref())?;
+            let executor=configured_plugin_executor(workspace,None,&allow_env,&[],&runtime,docker_image.as_deref(),wsl_distro.as_deref())?;
+            let mut results=Vec::new();
+            for agent in org.agent_fabric_descriptors() {
+                let input=serde_json::json!({
+                  "id":agent.agent_id,"role":agent.role,"department_id":agent.department_id,
+                  "supervisor_id":agent.supervisor_id,"cpu_millis":1000,"memory_mib":1024,
+                  "tools":agent.tools,"capabilities":agent.capabilities,"remote":agent.remote_eligible,
+                  "workspace":agent.workspace,"memory_namespace":agent.memory_namespace,
+                  "model_policy":agent.model_policy,"device_policy":agent.device_policy
+                });
+                let result=executor.execute(PluginCall{
+                  plugin_id:"workers.agent.fabric".into(),capability:"worker.register".into(),input,approved:false
+                }).await.map_err(|e|e.to_string())?;
+                results.push(result);
+            }
+            println!("{}",serde_json::to_string_pretty(&results).map_err(|e|e.to_string())?);
         },
         Commands::AutomationAdd { db, name, goal, trigger_json } => {
             let trigger: Trigger = serde_json::from_str(&trigger_json)
