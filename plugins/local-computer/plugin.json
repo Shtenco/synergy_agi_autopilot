@@ -12,7 +12,8 @@
       "requires_approval": false,
       "mapped_core_capabilities": [
         "ReadWorkspace"
-      ]
+      ],
+      "parallel_safe": true
     },
     {
       "name": "computer.write_file",
@@ -20,7 +21,8 @@
       "requires_approval": false,
       "mapped_core_capabilities": [
         "WriteWorkspace"
-      ]
+      ],
+      "parallel_safe": false
     },
     {
       "name": "computer.run_command",
@@ -28,13 +30,15 @@
       "requires_approval": true,
       "mapped_core_capabilities": [
         "ExecuteProcess"
-      ]
+      ],
+      "parallel_safe": false
     },
     {
       "name": "computer.system_info",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     }
   ],
   "endpoints": [
