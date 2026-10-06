@@ -26,6 +26,10 @@ jobs:
         run: cargo test --workspace
       - name: M10 verified cognitive DAG smoke
         run: cargo run -p open-autopilot -- cognitive-plan-verify --proposal examples/m10/sales-to-file-cognitive-plan.json
+      - name: M11 verified transform DAG smoke
+        run: cargo run -p open-autopilot -- cognitive-plan-verify --proposal examples/m11/browser-to-sales-transform-plan.json
+      - name: M11 AI organization validation
+        run: cargo run -p open-autopilot -- org-validate
 
   desktop-renderer:
     runs-on: windows-latest
@@ -87,7 +91,10 @@ jobs:
           python -m json.tool schemas/synergy.plugin.v1.schema.json > /dev/null
           python -m json.tool schemas/synergy.cli-capabilities.v1.schema.json > /dev/null
           python -m json.tool schemas/synergy.cognitive-plan.v1.schema.json > /dev/null
+          python -m json.tool schemas/synergy.organization.v1.schema.json > /dev/null
+          python -m json.tool config/organization.default.json > /dev/null
           python -m json.tool examples/m10/sales-to-file-cognitive-plan.json > /dev/null
+          python -m json.tool examples/m11/browser-to-sales-transform-plan.json > /dev/null
           for f in plugins/*/plugin.json; do python -m json.tool "$f" > /dev/null; done
       - name: Compile M8 discovery scripts
         run: python -m py_compile scripts/discover-plugin-surfaces.py scripts/propose-plugin-build.py
