@@ -30,6 +30,12 @@ jobs:
         run: cargo run -p open-autopilot -- cognitive-plan-verify --proposal examples/m11/browser-to-sales-transform-plan.json
       - name: M11 AI organization validation
         run: cargo run -p open-autopilot -- org-validate
+      - name: M12 persistent workforce smoke
+        shell: bash
+        run: |
+          rm -f target/m12-workforce-ci.db
+          cargo run -p open-autopilot -- workforce-init --db target/m12-workforce-ci.db
+          cargo run -p open-autopilot -- workforce-status --db target/m12-workforce-ci.db
 
   desktop-renderer:
     runs-on: windows-latest
@@ -92,7 +98,9 @@ jobs:
           python -m json.tool schemas/synergy.cli-capabilities.v1.schema.json > /dev/null
           python -m json.tool schemas/synergy.cognitive-plan.v1.schema.json > /dev/null
           python -m json.tool schemas/synergy.organization.v1.schema.json > /dev/null
+          python -m json.tool schemas/synergy.workforce.v1.schema.json > /dev/null
           python -m json.tool config/organization.default.json > /dev/null
+          python -m json.tool config/workforce.default.json > /dev/null
           python -m json.tool examples/m10/sales-to-file-cognitive-plan.json > /dev/null
           python -m json.tool examples/m11/browser-to-sales-transform-plan.json > /dev/null
           for f in plugins/*/plugin.json; do python -m json.tool "$f" > /dev/null; done
