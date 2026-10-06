@@ -94,6 +94,10 @@
             "type": "array",
             "items": {},
             "uniqueItems": true
+          },
+          "parallel_safe": {
+            "type": "boolean",
+            "default": false
           }
         }
       }
