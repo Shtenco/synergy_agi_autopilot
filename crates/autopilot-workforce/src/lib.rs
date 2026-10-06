@@ -1004,9 +1004,10 @@ mod tests {
         let id=item.id;
         store.enqueue(&item).unwrap();
         let approval=Uuid::new_v4();
+        let approval_text=approval.to_string();
         store.attach_approval(id,approval).unwrap();
         let loaded=store.get_work_item(id).unwrap().unwrap();
-        assert_eq!(loaded.approval_id.as_deref(),Some(approval.to_string().as_str()));
+        assert_eq!(loaded.approval_id.as_deref(),Some(approval_text.as_str()));
     }
 
     #[test]
