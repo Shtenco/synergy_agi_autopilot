@@ -260,6 +260,19 @@ enum Commands {
         #[arg(long)] docker_image: Option<String>,
         #[arg(long)] wsl_distro: Option<String>,
     },
+    WorkforceCompanyCycle {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long, default_value = "company-cycle")] owner_prefix: String,
+        #[arg(long)] organization: Option<PathBuf>,
+        #[arg(long, default_value = "config/workforce.default.json")] workforce_config: PathBuf,
+        #[arg(long)] workspace: Option<PathBuf>,
+        #[arg(long)] control_db: Option<PathBuf>,
+        #[arg(long = "allow-env")] allow_env: Vec<String>,
+        #[arg(long = "allow-generated-program")] allow_generated_program: Vec<String>,
+        #[arg(long, default_value = "native")] runtime: String,
+        #[arg(long)] docker_image: Option<String>,
+        #[arg(long)] wsl_distro: Option<String>,
+    },
     WorkforceMaintain {
         #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
         #[arg(long)] organization: Option<PathBuf>,
@@ -1766,6 +1779,19 @@ async fn main() -> Result<(), String> {
             let workforce=WorkforceExecutor::new(store,org,executor,config);
             let results=workforce.run_department_once(&department,&owner_prefix).await.map_err(|e|e.to_string())?;
             println!("{}",serde_json::to_string_pretty(&results).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceCompanyCycle { db,owner_prefix,organization,workforce_config,workspace,control_db,allow_env,allow_generated_program,runtime,docker_image,wsl_distro } => {
+            let org=Arc::new(load_organization(organization.as_deref())?);
+            let config=load_workforce_config(&workforce_config)?;
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            store.seed_organization(&org).map_err(|e|e.to_string())?;
+            for employee in &org.spec().employees {
+                store.heartbeat_employee(&employee.id,Utc::now()).map_err(|e|e.to_string())?;
+            }
+            let executor=configured_plugin_executor(workspace,control_db,&allow_env,&allow_generated_program,&runtime,docker_image.as_deref(),wsl_distro.as_deref())?;
+            let workforce=WorkforceExecutor::new(store,org,executor,config);
+            let report=workforce.run_company_once(&owner_prefix).await.map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&report).map_err(|e|e.to_string())?);
         },
         Commands::WorkforceMaintain { db,organization,workforce_config } => {
             let org=Arc::new(load_organization(organization.as_deref())?);
