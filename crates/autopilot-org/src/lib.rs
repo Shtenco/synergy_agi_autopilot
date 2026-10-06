@@ -76,6 +76,22 @@ pub enum OrgError {
     CapabilityOutsideDepartment { employee: String, capability: String },
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EmployeeAgentDescriptor {
+    pub agent_id: String,
+    pub role: String,
+    pub department_id: String,
+    pub supervisor_id: Option<String>,
+    pub capabilities: BTreeSet<String>,
+    pub tools: BTreeSet<String>,
+    pub workspace: String,
+    pub memory_namespace: String,
+    pub model_policy: String,
+    pub device_policy: String,
+    pub remote_eligible: bool,
+    pub autonomous: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct Organization {
     spec: OrganizationSpec,
@@ -160,6 +176,36 @@ impl Organization {
         });
         values
     }
+    pub fn agent_fabric_descriptors(&self) -> Vec<EmployeeAgentDescriptor> {
+        self.employees.values().map(|employee| EmployeeAgentDescriptor {
+            agent_id: employee.id.clone(),
+            role: employee.title.clone(),
+            department_id: employee.department_id.clone(),
+            supervisor_id: employee.supervisor_id.clone(),
+            capabilities: employee.capabilities.clone(),
+            tools: employee.tools.clone(),
+            workspace: if employee.workspace.is_empty() {
+                self.departments.get(&employee.department_id)
+                    .map(|department| department.workspace.clone())
+                    .unwrap_or_default()
+            } else {
+                employee.workspace.clone()
+            },
+            memory_namespace: if employee.memory_namespace.is_empty() {
+                self.departments.get(&employee.department_id)
+                    .map(|department| department.memory_namespace.clone())
+                    .unwrap_or_default()
+            } else {
+                employee.memory_namespace.clone()
+            },
+            model_policy: employee.model_policy.clone(),
+            device_policy: employee.device_policy.clone(),
+            remote_eligible: employee.device_policy.to_ascii_lowercase().contains("remote")
+                || employee.device_policy.to_ascii_lowercase().contains("fabric"),
+            autonomous: employee.autonomous,
+        }).collect()
+    }
+
 }
 
 fn supervision_cycle(employees: &BTreeMap<String, EmployeeSpec>) -> bool {
@@ -211,6 +257,17 @@ mod tests {
                 }
             ],
         }
+    }
+
+    #[test]
+    fn default_organization_compiles_to_agent_descriptors() {
+        let raw = include_str!("../../../config/organization.default.json");
+        let spec: OrganizationSpec = serde_json::from_str(raw).unwrap();
+        let org = Organization::validate(spec).unwrap();
+        let agents = org.agent_fabric_descriptors();
+        assert_eq!(agents.len(), org.spec().employees.len());
+        assert!(agents.iter().any(|agent| agent.agent_id == "software-engineer"));
+        assert!(agents.iter().all(|agent| !agent.department_id.is_empty()));
     }
 
     #[test]
