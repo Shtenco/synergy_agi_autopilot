@@ -37,6 +37,10 @@ pub struct PluginGoalStep {
     pub input: Value,
     pub approved: bool,
     pub risk: RiskClass,
+    #[serde(default)]
+    pub employee_id: Option<String>,
+    #[serde(default)]
+    pub department_id: Option<String>,
 }
 
 impl PluginGoalStep {
@@ -55,6 +59,8 @@ impl PluginGoalStep {
             input,
             approved: false,
             risk,
+            employee_id: None,
+            department_id: None,
         }
     }
 
@@ -79,6 +85,8 @@ impl Planner for PluginPlan {
                 "capability": step.capability,
                 "input": step.input,
                 "approved": step.approved,
+                "employee_id": step.employee_id,
+                "department_id": step.department_id,
             });
             Ok(PlannedTask {
                 role: step.role.clone(),
@@ -412,12 +420,14 @@ impl ParallelPluginWorkflowEngine {
         &self,
         goal_fingerprint: &str,
         outcome: &ParallelStepOutcome,
+        employee_id: Option<&str>,
     ) -> Result<(), String> {
         let Some(store) = &self.outcomes else { return Ok(()) };
         let mut record = OutcomeRecord::new(
             goal_fingerprint,
             format!("{}/{}", outcome.plugin_id, outcome.capability),
         );
+        record.employee_id = employee_id.map(str::to_string);
         record.success = outcome.success;
         record.verified = outcome.success;
         record.latency_ms = outcome.latency_ms;
@@ -488,7 +498,8 @@ impl ParallelPluginWorkflowEngine {
             for step_id in layer {
                 let outcome = layer_outcomes.remove(step_id)
                     .ok_or_else(|| format!("workflow step produced no outcome: {step_id}"))?;
-                self.record_outcome(goal_fingerprint, &outcome).await?;
+                let employee_id = by_id.get(step_id).and_then(|step| step.employee_id.as_deref());
+                self.record_outcome(goal_fingerprint, &outcome, employee_id).await?;
                 if !outcome.success {
                     self.audit.append(AuditEvent::new(
                         correlation,
