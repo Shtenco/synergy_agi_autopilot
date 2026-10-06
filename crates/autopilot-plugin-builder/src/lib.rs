@@ -328,6 +328,8 @@ impl PluginBuilder {
                 risk: request.risk,
                 requires_approval: request.requires_approval || request.risk >= RiskClass::High,
                 mapped_core_capabilities: mapped_capabilities(&request.source, request.risk),
+            
+                parallel_safe: false,
             }],
             endpoints: vec![endpoint],
             tags: request.tags,
