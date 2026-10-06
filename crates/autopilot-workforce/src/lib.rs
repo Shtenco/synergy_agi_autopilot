@@ -844,6 +844,36 @@ impl WorkforceExecutor {
         Ok(results)
     }
 
+    pub async fn run_company_once(
+        &self,
+        owner_prefix:&str,
+    )->Result<CompanyCycleReport> {
+        let maintenance=self.maintain(Utc::now())?;
+        let mut report=CompanyCycleReport{maintenance,leadership:Vec::new(),departments:BTreeMap::new()};
+
+        if self.organization.department("leadership").is_some() {
+            report.leadership=self.run_department_once("leadership",&format!("{owner_prefix}:leadership")).await?;
+        }
+
+        let mut jobs=tokio::task::JoinSet::new();
+        for department in self.organization.spec().departments.iter()
+            .filter(|department|department.id!="leadership")
+        {
+            let worker=self.clone();
+            let department_id=department.id.clone();
+            let owner=format!("{owner_prefix}:{}",department.id);
+            jobs.spawn(async move {
+                let result=worker.run_department_once(&department_id,&owner).await;
+                (department_id,result)
+            });
+        }
+        while let Some(joined)=jobs.join_next().await {
+            let (department,result)=joined.map_err(|e|WorkforceError::Execution(format!("company department join failure: {e}")))?;
+            report.departments.insert(department,result?);
+        }
+        Ok(report)
+    }
+
     pub fn maintain(&self,now:DateTime<Utc>)->Result<MaintenanceReport> {
         let mut report=MaintenanceReport::default();
         report.recovered_leases=self.store.recover_expired_leases(now)?;
@@ -859,6 +889,13 @@ impl WorkforceExecutor {
         report.nodes_marked_offline=self.store.mark_stale_nodes_offline(now,max_offline)?;
         Ok(report)
     }
+}
+
+#[derive(Clone,Debug,Default,Serialize,Deserialize)]
+pub struct CompanyCycleReport {
+    pub maintenance:MaintenanceReport,
+    pub leadership:Vec<(String,Option<WorkItem>)>,
+    pub departments:BTreeMap<String,Vec<(String,Option<WorkItem>)>>,
 }
 
 #[derive(Clone,Debug,Default,Serialize,Deserialize)]
