@@ -189,6 +189,7 @@ pub enum WorkforceError {
     #[error("workforce store lock poisoned")] Poisoned,
     #[error("unknown employee: {0}")] UnknownEmployee(String),
     #[error("unknown work item: {0}")] UnknownWorkItem(Uuid),
+    #[error("unknown initiative: {0}")] UnknownInitiative(Uuid),
     #[error("unknown node: {0}")] UnknownNode(String),
     #[error("employee {employee} is not eligible for capability {capability}")]
     Ineligible { employee:String, capability:String },
@@ -501,6 +502,33 @@ impl WorkforceStore {
         Ok(Some(target))
     }
 
+    pub fn list_initiatives(&self,department_id:Option<&str>)->Result<Vec<Initiative>> {
+        let conn=self.conn()?;
+        let sql=if department_id.is_some(){
+          "SELECT id,owner_employee_id,department_id,title,objective,status,score,created_at,updated_at FROM workforce_initiatives WHERE department_id=?1 ORDER BY score DESC,created_at"
+        }else{
+          "SELECT id,owner_employee_id,department_id,title,objective,status,score,created_at,updated_at FROM workforce_initiatives ORDER BY department_id,score DESC,created_at"
+        };
+        let mut stmt=conn.prepare(sql)?;
+        let map_row=|r:&rusqlite::Row<'_>|->rusqlite::Result<Initiative>{
+          let id_text:String=r.get(0)?;
+          Ok(Initiative{
+            id:Uuid::parse_str(&id_text).map_err(|e|rusqlite::Error::FromSqlConversionFailure(id_text.len(),rusqlite::types::Type::Text,Box::new(e)))?,
+            owner_employee_id:r.get(1)?,department_id:r.get(2)?,title:r.get(3)?,objective:r.get(4)?,
+            status:r.get(5)?,score:r.get(6)?,created_at:parse_time(r.get(7)?)?,updated_at:parse_time(r.get(8)?)?
+          })
+        };
+        let mut out=Vec::new();
+        if let Some(department)=department_id {
+          let rows=stmt.query_map([department],map_row)?;
+          for row in rows{out.push(row?);}
+        } else {
+          let rows=stmt.query_map([],map_row)?;
+          for row in rows{out.push(row?);}
+        }
+        Ok(out)
+    }
+
     pub fn get_initiative(&self,id:Uuid)->Result<Option<Initiative>> {
         self.conn()?.query_row(
           "SELECT id,owner_employee_id,department_id,title,objective,status,score,created_at,updated_at FROM workforce_initiatives WHERE id=?1",
@@ -522,7 +550,7 @@ impl WorkforceStore {
         policy:&WorkforcePolicy,
     )->Result<WorkItem> {
         let initiative=self.get_initiative(initiative_id)?
-          .ok_or(WorkforceError::UnknownWorkItem(initiative_id))?;
+          .ok_or(WorkforceError::UnknownInitiative(initiative_id))?;
         let department=org.department(&initiative.department_id)
           .ok_or_else(||WorkforceError::UnknownEmployee(format!("department:{}",initiative.department_id)))?;
         let manager=org.employee(&department.manager_employee_id)
