@@ -33,7 +33,8 @@
         "email.send",
         "crm.read",
         "crm.record.create",
-        "crm.record.update"
+        "crm.record.update",
+        "intelligence.reason"
       ]
     },
     {
@@ -150,7 +151,8 @@
         "queue.publish",
         "queue.consume",
         "http.request",
-        "company.status"
+        "company.status",
+        "intelligence.reason"
       ]
     },
     {
@@ -168,7 +170,8 @@
         "email.send",
         "calendar.read",
         "calendar.event.create",
-        "business.sales.plan"
+        "business.sales.plan",
+        "intelligence.reason"
       ]
     },
     {
@@ -201,7 +204,8 @@
         "computer.remote.run",
         "worker.schedule",
         "worker.lease",
-        "computer.system_info"
+        "computer.system_info",
+        "intelligence.reason"
       ]
     }
   ],
@@ -257,7 +261,8 @@
       "capabilities": [
         "business.sales.plan",
         "business.sales.compose_offer",
-        "crm.read"
+        "crm.read",
+        "intelligence.reason"
       ],
       "tools": [],
       "max_risk": "High",
@@ -644,7 +649,8 @@
         "calendar.read",
         "queue.consume",
         "company.status",
-        "http.request"
+        "http.request",
+        "intelligence.reason"
       ],
       "tools": [],
       "max_risk": "High",
@@ -705,7 +711,8 @@
         "crm.read",
         "email.read",
         "calendar.read",
-        "business.sales.plan"
+        "business.sales.plan",
+        "intelligence.reason"
       ],
       "tools": [],
       "max_risk": "High",
@@ -787,7 +794,8 @@
         "computer.remote.list_dir",
         "computer.remote.read_file",
         "worker.schedule",
-        "computer.system_info"
+        "computer.system_info",
+        "intelligence.reason"
       ],
       "tools": [],
       "max_risk": "High",
