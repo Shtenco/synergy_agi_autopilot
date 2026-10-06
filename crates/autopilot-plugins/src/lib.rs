@@ -72,6 +72,8 @@ pub struct PluginCapability {
     pub requires_approval: bool,
     #[serde(default)]
     pub mapped_core_capabilities: BTreeSet<Capability>,
+    #[serde(default)]
+    pub parallel_safe: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -330,6 +332,7 @@ mod tests {
                 risk: RiskClass::Low,
                 requires_approval: false,
                 mapped_core_capabilities: BTreeSet::new(),
+            parallel_safe: false,
             }],
             endpoints: vec![],
             tags: BTreeSet::new(),
