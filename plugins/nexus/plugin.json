@@ -10,25 +10,29 @@
       "name": "intelligence.infer",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "intelligence.reason",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "memory.search",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "memory.upsert",
       "risk": "Medium",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     }
   ],
   "endpoints": [
