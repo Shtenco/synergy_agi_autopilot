@@ -420,19 +420,36 @@ impl ParallelPluginWorkflowEngine {
         &self,
         goal_fingerprint: &str,
         outcome: &ParallelStepOutcome,
-        employee_id: Option<&str>,
+        step: &PluginGoalStep,
     ) -> Result<(), String> {
         let Some(store) = &self.outcomes else { return Ok(()) };
-        let route_key = employee_id
+        let route_key = step.employee_id.as_deref()
             .map(|employee| format!("employee:{employee}|{}/{}", outcome.plugin_id, outcome.capability))
             .unwrap_or_else(|| format!("plugin:{}/{}", outcome.plugin_id, outcome.capability));
         let mut record = OutcomeRecord::new(goal_fingerprint, route_key);
-        record.employee_id = employee_id.map(str::to_string);
+        record.employee_id = step.employee_id.clone();
+
+        if let Some(manifest) = self.executor.registry().get(&outcome.plugin_id) {
+            record.provider = Some(manifest.provider.clone());
+            record.device = manifest.endpoints.first().map(|endpoint| {
+                format!("{}:{}", endpoint.transport, endpoint.address)
+            });
+        }
+        if let Some(result) = &outcome.result {
+            record.model = result.pointer("/output/model").and_then(Value::as_str).map(str::to_string)
+                .or_else(|| result.pointer("/output/result/model").and_then(Value::as_str).map(str::to_string));
+            record.cost_microusd = result.pointer("/output/cost_microusd").and_then(Value::as_i64)
+                .or_else(|| result.pointer("/output/result/cost_microusd").and_then(Value::as_i64))
+                .unwrap_or(0);
+        }
+
         record.success = outcome.success;
         record.verified = outcome.success;
         record.latency_ms = outcome.latency_ms;
         record.quality_score = if outcome.success { 1.0 } else { 0.0 };
-        record.error_class = outcome.error.as_ref().map(|_| "plugin_execution".into());
+        record.error_class = outcome.error.as_ref().map(|error| {
+            error.split(':').next().unwrap_or("plugin_execution").to_string()
+        });
         store.record(&record).map_err(|error| error.to_string())
     }
 
@@ -498,8 +515,9 @@ impl ParallelPluginWorkflowEngine {
             for step_id in layer {
                 let outcome = layer_outcomes.remove(step_id)
                     .ok_or_else(|| format!("workflow step produced no outcome: {step_id}"))?;
-                let employee_id = by_id.get(step_id).and_then(|step| step.employee_id.as_deref());
-                self.record_outcome(goal_fingerprint, &outcome, employee_id).await?;
+                let step = by_id.get(step_id)
+                    .ok_or_else(|| format!("outcome references unknown step: {step_id}"))?;
+                self.record_outcome(goal_fingerprint, &outcome, step).await?;
                 if !outcome.success {
                     self.audit.append(AuditEvent::new(
                         correlation,
