@@ -135,6 +135,9 @@ enum Commands {
     OrgValidate {
         #[arg(long)] organization: Option<PathBuf>,
     },
+    OrgSwarm {
+        #[arg(long)] organization: Option<PathBuf>,
+    },
     OrgRoute {
         #[arg(long)] capability: String,
         #[arg(long)] risk: String,
@@ -346,6 +349,10 @@ fn assign_ai_employees(
             .ok_or_else(|| format!("outcome routing selected unknown employee: {selected_id}"))?;
         step.employee_id = Some(employee.id.clone());
         step.department_id = Some(employee.department_id.clone());
+        step.role = AgentRole::Custom(format!(
+            "{}::{}::{}",
+            employee.department_id, employee.title, employee.id
+        ));
     }
     Ok(())
 }
@@ -1403,6 +1410,14 @@ async fn main() -> Result<(), String> {
             println!(
                 "{}",
                 serde_json::to_string_pretty(org.spec()).map_err(|error| error.to_string())?
+            );
+        },
+        Commands::OrgSwarm { organization } => {
+            let org = load_organization(organization.as_deref())?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&org.agent_fabric_descriptors())
+                    .map_err(|error| error.to_string())?
             );
         },
         Commands::OrgRoute { capability, risk, organization, outcome_db, goal } => {
