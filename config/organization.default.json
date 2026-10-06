@@ -1,0 +1,822 @@
+{
+  "schema": "synergy.organization.v1",
+  "company_id": "synergy-ai-company",
+  "company_name": "SYNERGY AI Company",
+  "departments": [
+    {
+      "id": "leadership",
+      "name": "AI Executive Office",
+      "mission": "Translate human goals into company strategy and bounded missions.",
+      "manager_employee_id": "ceo",
+      "workspace": "departments/leadership",
+      "memory_namespace": "org/leadership",
+      "monthly_budget_microusd": 20000000,
+      "allowed_capabilities": [
+        "business.ceo.plan",
+        "company.status",
+        "intelligence.reason",
+        "memory.search"
+      ]
+    },
+    {
+      "id": "sales",
+      "name": "AI Sales Department",
+      "mission": "Generate qualified pipeline, proposals and approved outreach.",
+      "manager_employee_id": "sales-director",
+      "workspace": "departments/sales",
+      "memory_namespace": "org/sales",
+      "monthly_budget_microusd": 30000000,
+      "allowed_capabilities": [
+        "business.sales.plan",
+        "business.sales.compose_offer",
+        "email.read",
+        "email.send",
+        "crm.read",
+        "crm.record.create",
+        "crm.record.update"
+      ]
+    },
+    {
+      "id": "marketing",
+      "name": "AI Marketing & SMM",
+      "mission": "Research audiences, plan content and manage approved publishing.",
+      "manager_employee_id": "marketing-director",
+      "workspace": "departments/marketing",
+      "memory_namespace": "org/marketing",
+      "monthly_budget_microusd": 25000000,
+      "allowed_capabilities": [
+        "business.smm.plan",
+        "business.external.publish",
+        "browser.navigate",
+        "browser.snapshot",
+        "intelligence.reason",
+        "memory.search"
+      ]
+    },
+    {
+      "id": "finance",
+      "name": "AI Finance Office",
+      "mission": "Analyze budgets, margins, unit economics and operating status.",
+      "manager_employee_id": "cfo",
+      "workspace": "departments/finance",
+      "memory_namespace": "org/finance",
+      "monthly_budget_microusd": 10000000,
+      "allowed_capabilities": [
+        "business.cfo.analyze",
+        "company.status",
+        "database.query",
+        "intelligence.reason"
+      ]
+    },
+    {
+      "id": "research",
+      "name": "AI Research & Intelligence",
+      "mission": "Collect evidence, reason over sources and maintain institutional memory.",
+      "manager_employee_id": "research-director",
+      "workspace": "departments/research",
+      "memory_namespace": "org/research",
+      "monthly_budget_microusd": 20000000,
+      "allowed_capabilities": [
+        "memory.search",
+        "memory.upsert",
+        "intelligence.infer",
+        "intelligence.reason",
+        "browser.navigate",
+        "browser.snapshot",
+        "database.query"
+      ]
+    },
+    {
+      "id": "product",
+      "name": "AI Product Department",
+      "mission": "Turn evidence and opportunities into product decisions and requirements.",
+      "manager_employee_id": "product-director",
+      "workspace": "departments/product",
+      "memory_namespace": "org/product",
+      "monthly_budget_microusd": 12000000,
+      "allowed_capabilities": [
+        "intelligence.reason",
+        "memory.search",
+        "browser.snapshot",
+        "company.opportunity.ingest"
+      ]
+    },
+    {
+      "id": "engineering",
+      "name": "AI Engineering",
+      "mission": "Build, modify and verify software through bounded computer and agent tools.",
+      "manager_employee_id": "cto",
+      "workspace": "departments/engineering",
+      "memory_namespace": "org/engineering",
+      "monthly_budget_microusd": 30000000,
+      "allowed_capabilities": [
+        "computer.read_file",
+        "computer.write_file",
+        "computer.run_command",
+        "computer.system_info",
+        "worker.schedule",
+        "worker.lease",
+        "intelligence.reason"
+      ]
+    },
+    {
+      "id": "quality",
+      "name": "AI QA & Security",
+      "mission": "Independently verify correctness, evidence and security boundaries.",
+      "manager_employee_id": "qa-director",
+      "workspace": "departments/quality",
+      "memory_namespace": "org/quality",
+      "monthly_budget_microusd": 12000000,
+      "allowed_capabilities": [
+        "computer.read_file",
+        "computer.system_info",
+        "browser.snapshot",
+        "business.verify.evidence",
+        "intelligence.reason"
+      ]
+    },
+    {
+      "id": "operations",
+      "name": "AI Operations & Automation",
+      "mission": "Run schedules, queues, calendars and approved operational integrations.",
+      "manager_employee_id": "ops-director",
+      "workspace": "departments/operations",
+      "memory_namespace": "org/operations",
+      "monthly_budget_microusd": 15000000,
+      "allowed_capabilities": [
+        "calendar.read",
+        "calendar.event.create",
+        "calendar.event.update",
+        "queue.publish",
+        "queue.consume",
+        "http.request",
+        "company.status"
+      ]
+    },
+    {
+      "id": "success",
+      "name": "AI CRM & Customer Success",
+      "mission": "Maintain customer context and execute approved service communications.",
+      "manager_employee_id": "success-director",
+      "workspace": "departments/success",
+      "memory_namespace": "org/success",
+      "monthly_budget_microusd": 18000000,
+      "allowed_capabilities": [
+        "crm.read",
+        "crm.record.update",
+        "email.read",
+        "email.send",
+        "calendar.read",
+        "calendar.event.create",
+        "business.sales.plan"
+      ]
+    },
+    {
+      "id": "creative",
+      "name": "AI Creative Studio",
+      "mission": "Create sales, content and visual briefs and persist approved artifacts.",
+      "manager_employee_id": "creative-director",
+      "workspace": "departments/creative",
+      "memory_namespace": "org/creative",
+      "monthly_budget_microusd": 15000000,
+      "allowed_capabilities": [
+        "business.smm.plan",
+        "business.sales.compose_offer",
+        "browser.snapshot",
+        "computer.write_file",
+        "intelligence.reason"
+      ]
+    },
+    {
+      "id": "infra",
+      "name": "AI Distributed Infrastructure",
+      "mission": "Operate local/remote nodes and agent-fabric scheduling within policy.",
+      "manager_employee_id": "infra-director",
+      "workspace": "departments/infra",
+      "memory_namespace": "org/infra",
+      "monthly_budget_microusd": 20000000,
+      "allowed_capabilities": [
+        "computer.remote.list_dir",
+        "computer.remote.read_file",
+        "computer.remote.run",
+        "worker.schedule",
+        "worker.lease",
+        "computer.system_info"
+      ]
+    }
+  ],
+  "employees": [
+    {
+      "id": "ceo",
+      "name": "Astra",
+      "title": "AI CEO",
+      "department_id": "leadership",
+      "supervisor_id": null,
+      "instructions": "Operate as AI CEO. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.ceo.plan",
+        "company.status",
+        "intelligence.reason",
+        "memory.search"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/leadership/ceo",
+      "memory_namespace": "org/leadership/ceo",
+      "autonomous": true
+    },
+    {
+      "id": "strategy-analyst",
+      "name": "Nova",
+      "title": "AI Strategy Analyst",
+      "department_id": "leadership",
+      "supervisor_id": "ceo",
+      "instructions": "Operate as AI Strategy Analyst. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "company.status",
+        "intelligence.reason",
+        "memory.search"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/leadership/strategy-analyst",
+      "memory_namespace": "org/leadership/strategy-analyst",
+      "autonomous": true
+    },
+    {
+      "id": "sales-director",
+      "name": "Orion",
+      "title": "AI Sales Director",
+      "department_id": "sales",
+      "supervisor_id": null,
+      "instructions": "Operate as AI Sales Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.sales.plan",
+        "business.sales.compose_offer",
+        "crm.read"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/sales/sales-director",
+      "memory_namespace": "org/sales/sales-director",
+      "autonomous": true
+    },
+    {
+      "id": "sales-researcher",
+      "name": "Scout",
+      "title": "AI Lead Researcher",
+      "department_id": "sales",
+      "supervisor_id": "sales-director",
+      "instructions": "Operate as AI Lead Researcher. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.sales.plan",
+        "crm.read",
+        "email.read"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/sales/sales-researcher",
+      "memory_namespace": "org/sales/sales-researcher",
+      "autonomous": true
+    },
+    {
+      "id": "sales-copy",
+      "name": "Maya",
+      "title": "AI Proposal & Outreach Specialist",
+      "department_id": "sales",
+      "supervisor_id": "sales-director",
+      "instructions": "Operate as AI Proposal & Outreach Specialist. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.sales.compose_offer",
+        "email.send"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/sales/sales-copy",
+      "memory_namespace": "org/sales/sales-copy",
+      "autonomous": true
+    },
+    {
+      "id": "crm-manager",
+      "name": "Lina",
+      "title": "AI CRM Manager",
+      "department_id": "sales",
+      "supervisor_id": "sales-director",
+      "instructions": "Operate as AI CRM Manager. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "crm.read",
+        "crm.record.create",
+        "crm.record.update"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/sales/crm-manager",
+      "memory_namespace": "org/sales/crm-manager",
+      "autonomous": true
+    },
+    {
+      "id": "marketing-director",
+      "name": "Pulse",
+      "title": "AI Marketing Director",
+      "department_id": "marketing",
+      "supervisor_id": null,
+      "instructions": "Operate as AI Marketing Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.smm.plan",
+        "intelligence.reason",
+        "memory.search"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/marketing/marketing-director",
+      "memory_namespace": "org/marketing/marketing-director",
+      "autonomous": true
+    },
+    {
+      "id": "content-strategist",
+      "name": "Echo",
+      "title": "AI Content Strategist",
+      "department_id": "marketing",
+      "supervisor_id": "marketing-director",
+      "instructions": "Operate as AI Content Strategist. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.smm.plan",
+        "browser.snapshot",
+        "intelligence.reason"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/marketing/content-strategist",
+      "memory_namespace": "org/marketing/content-strategist",
+      "autonomous": true
+    },
+    {
+      "id": "publisher",
+      "name": "Beacon",
+      "title": "AI Publishing Operator",
+      "department_id": "marketing",
+      "supervisor_id": "marketing-director",
+      "instructions": "Operate as AI Publishing Operator. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.external.publish"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/marketing/publisher",
+      "memory_namespace": "org/marketing/publisher",
+      "autonomous": true
+    },
+    {
+      "id": "cfo",
+      "name": "Ledger",
+      "title": "AI CFO",
+      "department_id": "finance",
+      "supervisor_id": null,
+      "instructions": "Operate as AI CFO. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.cfo.analyze",
+        "company.status",
+        "database.query",
+        "intelligence.reason"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/finance/cfo",
+      "memory_namespace": "org/finance/cfo",
+      "autonomous": true
+    },
+    {
+      "id": "finance-analyst",
+      "name": "Delta",
+      "title": "AI Financial Analyst",
+      "department_id": "finance",
+      "supervisor_id": "cfo",
+      "instructions": "Operate as AI Financial Analyst. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.cfo.analyze",
+        "database.query"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/finance/finance-analyst",
+      "memory_namespace": "org/finance/finance-analyst",
+      "autonomous": true
+    },
+    {
+      "id": "research-director",
+      "name": "Atlas",
+      "title": "AI Research Director",
+      "department_id": "research",
+      "supervisor_id": null,
+      "instructions": "Operate as AI Research Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "memory.search",
+        "memory.upsert",
+        "intelligence.reason",
+        "browser.navigate",
+        "browser.snapshot"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/research/research-director",
+      "memory_namespace": "org/research/research-director",
+      "autonomous": true
+    },
+    {
+      "id": "web-researcher",
+      "name": "Scout-Web",
+      "title": "AI Web Researcher",
+      "department_id": "research",
+      "supervisor_id": "research-director",
+      "instructions": "Operate as AI Web Researcher. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "browser.navigate",
+        "browser.snapshot",
+        "intelligence.infer"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/research/web-researcher",
+      "memory_namespace": "org/research/web-researcher",
+      "autonomous": true
+    },
+    {
+      "id": "knowledge-curator",
+      "name": "Mnemosyne",
+      "title": "AI Knowledge Curator",
+      "department_id": "research",
+      "supervisor_id": "research-director",
+      "instructions": "Operate as AI Knowledge Curator. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "memory.search",
+        "memory.upsert",
+        "database.query"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/research/knowledge-curator",
+      "memory_namespace": "org/research/knowledge-curator",
+      "autonomous": true
+    },
+    {
+      "id": "product-director",
+      "name": "Forge",
+      "title": "AI Product Director",
+      "department_id": "product",
+      "supervisor_id": null,
+      "instructions": "Operate as AI Product Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "intelligence.reason",
+        "memory.search",
+        "company.opportunity.ingest"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/product/product-director",
+      "memory_namespace": "org/product/product-director",
+      "autonomous": true
+    },
+    {
+      "id": "product-analyst",
+      "name": "Iris",
+      "title": "AI Product Analyst",
+      "department_id": "product",
+      "supervisor_id": "product-director",
+      "instructions": "Operate as AI Product Analyst. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "intelligence.reason",
+        "browser.snapshot",
+        "memory.search"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/product/product-analyst",
+      "memory_namespace": "org/product/product-analyst",
+      "autonomous": true
+    },
+    {
+      "id": "cto",
+      "name": "Kernel",
+      "title": "AI CTO",
+      "department_id": "engineering",
+      "supervisor_id": null,
+      "instructions": "Operate as AI CTO. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "computer.read_file",
+        "computer.system_info",
+        "intelligence.reason",
+        "worker.schedule"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/engineering/cto",
+      "memory_namespace": "org/engineering/cto",
+      "autonomous": true
+    },
+    {
+      "id": "software-engineer",
+      "name": "Code",
+      "title": "AI Software Engineer",
+      "department_id": "engineering",
+      "supervisor_id": "cto",
+      "instructions": "Operate as AI Software Engineer. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "computer.read_file",
+        "computer.write_file",
+        "computer.run_command"
+      ],
+      "tools": [
+        "git",
+        "cargo",
+        "python"
+      ],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/engineering/software-engineer",
+      "memory_namespace": "org/engineering/software-engineer",
+      "autonomous": true
+    },
+    {
+      "id": "agent-engineer",
+      "name": "Swarm",
+      "title": "AI Agent Engineer",
+      "department_id": "engineering",
+      "supervisor_id": "cto",
+      "instructions": "Operate as AI Agent Engineer. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "worker.schedule",
+        "worker.lease",
+        "computer.read_file",
+        "intelligence.reason"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/engineering/agent-engineer",
+      "memory_namespace": "org/engineering/agent-engineer",
+      "autonomous": true
+    },
+    {
+      "id": "qa-director",
+      "name": "Sentinel",
+      "title": "AI QA & Security Director",
+      "department_id": "quality",
+      "supervisor_id": null,
+      "instructions": "Operate as AI QA & Security Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "computer.read_file",
+        "computer.system_info",
+        "business.verify.evidence",
+        "intelligence.reason"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/quality/qa-director",
+      "memory_namespace": "org/quality/qa-director",
+      "autonomous": true
+    },
+    {
+      "id": "qa-verifier",
+      "name": "Proof",
+      "title": "AI Verification Engineer",
+      "department_id": "quality",
+      "supervisor_id": "qa-director",
+      "instructions": "Operate as AI Verification Engineer. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "browser.snapshot",
+        "business.verify.evidence",
+        "computer.read_file"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/quality/qa-verifier",
+      "memory_namespace": "org/quality/qa-verifier",
+      "autonomous": true
+    },
+    {
+      "id": "ops-director",
+      "name": "Flow",
+      "title": "AI Operations Director",
+      "department_id": "operations",
+      "supervisor_id": null,
+      "instructions": "Operate as AI Operations Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "calendar.read",
+        "queue.consume",
+        "company.status",
+        "http.request"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/operations/ops-director",
+      "memory_namespace": "org/operations/ops-director",
+      "autonomous": true
+    },
+    {
+      "id": "scheduler",
+      "name": "Tempo",
+      "title": "AI Scheduling Coordinator",
+      "department_id": "operations",
+      "supervisor_id": "ops-director",
+      "instructions": "Operate as AI Scheduling Coordinator. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "calendar.read",
+        "calendar.event.create",
+        "calendar.event.update"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/operations/scheduler",
+      "memory_namespace": "org/operations/scheduler",
+      "autonomous": true
+    },
+    {
+      "id": "automation-operator",
+      "name": "Relay",
+      "title": "AI Automation Operator",
+      "department_id": "operations",
+      "supervisor_id": "ops-director",
+      "instructions": "Operate as AI Automation Operator. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "queue.publish",
+        "queue.consume",
+        "http.request"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/operations/automation-operator",
+      "memory_namespace": "org/operations/automation-operator",
+      "autonomous": true
+    },
+    {
+      "id": "success-director",
+      "name": "Care",
+      "title": "AI Customer Success Director",
+      "department_id": "success",
+      "supervisor_id": null,
+      "instructions": "Operate as AI Customer Success Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "crm.read",
+        "email.read",
+        "calendar.read",
+        "business.sales.plan"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/success/success-director",
+      "memory_namespace": "org/success/success-director",
+      "autonomous": true
+    },
+    {
+      "id": "account-manager",
+      "name": "Bridge",
+      "title": "AI Account Manager",
+      "department_id": "success",
+      "supervisor_id": "success-director",
+      "instructions": "Operate as AI Account Manager. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "crm.read",
+        "crm.record.update",
+        "email.send",
+        "calendar.event.create"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/success/account-manager",
+      "memory_namespace": "org/success/account-manager",
+      "autonomous": true
+    },
+    {
+      "id": "creative-director",
+      "name": "Muse",
+      "title": "AI Creative Director",
+      "department_id": "creative",
+      "supervisor_id": null,
+      "instructions": "Operate as AI Creative Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.smm.plan",
+        "business.sales.compose_offer",
+        "intelligence.reason"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/creative/creative-director",
+      "memory_namespace": "org/creative/creative-director",
+      "autonomous": true
+    },
+    {
+      "id": "creative-writer",
+      "name": "Quill",
+      "title": "AI Copywriter",
+      "department_id": "creative",
+      "supervisor_id": "creative-director",
+      "instructions": "Operate as AI Copywriter. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "business.smm.plan",
+        "business.sales.compose_offer",
+        "computer.write_file"
+      ],
+      "tools": [],
+      "max_risk": "Medium",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/creative/creative-writer",
+      "memory_namespace": "org/creative/creative-writer",
+      "autonomous": true
+    },
+    {
+      "id": "infra-director",
+      "name": "Mesh",
+      "title": "AI Infrastructure Director",
+      "department_id": "infra",
+      "supervisor_id": null,
+      "instructions": "Operate as AI Infrastructure Director. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "computer.remote.list_dir",
+        "computer.remote.read_file",
+        "worker.schedule",
+        "computer.system_info"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/infra/infra-director",
+      "memory_namespace": "org/infra/infra-director",
+      "autonomous": true
+    },
+    {
+      "id": "remote-operator",
+      "name": "Node",
+      "title": "AI Remote Node Operator",
+      "department_id": "infra",
+      "supervisor_id": "infra-director",
+      "instructions": "Operate as AI Remote Node Operator. Produce evidence, obey typed contracts, department policy, budgets and approval gates.",
+      "capabilities": [
+        "computer.remote.list_dir",
+        "computer.remote.read_file",
+        "computer.remote.run",
+        "worker.lease"
+      ],
+      "tools": [],
+      "max_risk": "High",
+      "model_policy": "outcome-aware-balanced",
+      "device_policy": "local-first-agent-fabric",
+      "workspace": "departments/infra/remote-operator",
+      "memory_namespace": "org/infra/remote-operator",
+      "autonomous": true
+    }
+  ]
+}
