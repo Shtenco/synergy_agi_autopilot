@@ -1,0 +1,51 @@
+{
+  "schema": "synergy.cognitive-plan.v1",
+  "goal": "Сними текст текущей страницы и квалифицируй его отделом продаж",
+  "steps": [
+    {
+      "id": "snapshot",
+      "objective": "Получить текст текущей страницы",
+      "plugin_id": "browser.local.playwright",
+      "capability": "browser.snapshot",
+      "hints": {
+        "headless": true
+      }
+    },
+    {
+      "id": "sales",
+      "objective": "Квалифицировать текст страницы как входящий лид",
+      "plugin_id": "business.capability.runtime",
+      "capability": "business.sales.plan",
+      "hints": {
+        "current_score": 0
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "from_step": "snapshot",
+      "to_step": "sales",
+      "to_field": "message",
+      "transform": {
+        "ops": [
+          {
+            "op": "get_field",
+            "field": "results"
+          },
+          {
+            "op": "first"
+          },
+          {
+            "op": "get_field",
+            "field": "text"
+          },
+          {
+            "op": "assert_string",
+            "min_length": 1,
+            "max_length": 20000
+          }
+        ]
+      }
+    }
+  ]
+}
