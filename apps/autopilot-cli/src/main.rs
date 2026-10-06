@@ -211,6 +211,16 @@ enum Commands {
         #[arg(long)] objective: String,
         #[arg(long, default_value_t = 0.5)] score: f64,
     },
+    WorkforceInitiativeList {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] department: Option<String>,
+    },
+    WorkforceInitiativePromote {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] initiative_id: String,
+        #[arg(long)] organization: Option<PathBuf>,
+        #[arg(long, default_value = "config/workforce.default.json")] workforce_config: PathBuf,
+    },
     WorkforceScheduleLink {
         #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
         #[arg(long)] employee: String,
@@ -1701,6 +1711,23 @@ async fn main() -> Result<(), String> {
             };
             store.add_initiative(&initiative).map_err(|e|e.to_string())?;
             println!("{}",serde_json::to_string_pretty(&initiative).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceInitiativeList { db,department } => {
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            let values=store.list_initiatives(department.as_deref()).map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&values).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceInitiativePromote { db,initiative_id,organization,workforce_config } => {
+            let org=load_organization(organization.as_deref())?;
+            let config=load_workforce_config(&workforce_config)?;
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            store.seed_organization(&org).map_err(|e|e.to_string())?;
+            let id=Uuid::parse_str(&initiative_id).map_err(|e|format!("invalid initiative id: {e}"))?;
+            let initiative=store.get_initiative(id).map_err(|e|e.to_string())?
+              .ok_or_else(||format!("initiative not found: {id}"))?;
+            let policy=config.policy_for(&initiative.department_id);
+            let work=store.promote_initiative_to_manager_work(&org,id,Utc::now(),&policy).map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&work).map_err(|e|e.to_string())?);
         },
         Commands::WorkforceScheduleLink { db,employee,automation_id,purpose } => {
             let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
