@@ -19,7 +19,7 @@ See:
 - `docs/M9_SEMANTIC_ARGUMENT_MAPPER_STATUS.md`
 - `docs/architecture/plugin-fabric-v1.md`
 
-Current convergence line includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, a Capability Graph over all 73 currently accessible Shtenco repositories, a self-building plugin fabric, M9 typed semantic inputs/workflows, and M10 verified typed outputs with a cognitive DAG planner.
+Current convergence line includes restart-safe automation/event/approval/budget state, Universal Connector Gateway, a Capability Graph over all 73 currently accessible Shtenco repositories, a self-building plugin fabric, M9 typed semantic inputs/workflows, M10 verified typed outputs/cognitive DAGs, and M11 verified transforms, parallel DAG execution, outcome learning and a staffed AI organization.
 
 ---
 
@@ -439,3 +439,69 @@ Canonical qualification remains:
 ```
 
 The verifier now covers M5 through M10.
+
+
+## M11 — Verified Transforms + Parallel DAG + Outcome Learning + AI Company
+
+M11 makes the verified DAG executable as a staffed, learning organization.
+
+```text
+Goal
+ -> M10 Verified DAG
+ -> Verified Transform Fabric
+ -> AI Department / Employee staffing
+ -> parallel-safe execution layers
+ -> runtime validation
+ -> verified outcome
+ -> OutcomeStore
+ -> advisory performance history for the next plan
+```
+
+New core crates:
+
+- `autopilot-transform`
+- `autopilot-outcomes`
+- `autopilot-org`
+
+Canonical organization:
+
+`config/organization.default.json`
+
+It currently defines **12 AI departments and 30 AI employees**.
+
+Useful commands:
+
+```text
+open-autopilot org-validate
+open-autopilot org-swarm
+open-autopilot org-route
+open-autopilot outcome-best
+open-autopilot universal-goal
+```
+
+Canonical M11 transform fixture:
+
+`examples/m11/browser-to-sales-transform-plan.json`
+
+It proves:
+
+```text
+browser.snapshot
+ -> results
+ -> first
+ -> text
+ -> assert_string(min_length=1)
+ -> business.sales.plan.message
+```
+
+Parallel execution is opt-in per capability with `parallel_safe=true`; the default is exclusive.
+
+`universal-goal` now staffs the verified DAG with eligible AI employees, uses prior verified outcome history when enough evidence exists, and runs safe execution layers concurrently.
+
+Canonical qualification:
+
+```powershell
+.\scripts\verify-autopilot.ps1
+```
+
+The verifier now covers M5 through M11.
