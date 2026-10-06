@@ -10,19 +10,22 @@
       "name": "worker.register",
       "risk": "Medium",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": false
     },
     {
       "name": "worker.schedule",
       "risk": "Medium",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": false
     },
     {
       "name": "worker.lease",
       "risk": "Medium",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": false
     },
     {
       "name": "worker.remote.delegate",
@@ -30,7 +33,8 @@
       "requires_approval": true,
       "mapped_core_capabilities": [
         "NetworkAccess"
-      ]
+      ],
+      "parallel_safe": false
     }
   ],
   "endpoints": [
@@ -89,6 +93,77 @@
         "task"
       ],
       "additionalProperties": false
+    },
+    "worker.register": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "department_id": {
+          "type": "string"
+        },
+        "supervisor_id": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cpu_millis": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1000
+        },
+        "memory_mib": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1024
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "remote": {
+          "type": "boolean",
+          "default": false
+        },
+        "workspace": {
+          "type": "string"
+        },
+        "memory_namespace": {
+          "type": "string"
+        },
+        "model_policy": {
+          "type": "string"
+        },
+        "device_policy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "role"
+      ],
+      "additionalProperties": true
     }
   },
   "output_contracts": {
@@ -161,6 +236,22 @@
         "lease_root"
       ],
       "additionalProperties": false
+    },
+    "worker.register": {
+      "type": "object",
+      "properties": {
+        "agent_id": {
+          "type": "string"
+        },
+        "registered": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "agent_id",
+        "registered"
+      ],
+      "additionalProperties": true
     }
   }
 }
