@@ -501,6 +501,66 @@ impl WorkforceStore {
         Ok(Some(target))
     }
 
+    pub fn get_initiative(&self,id:Uuid)->Result<Option<Initiative>> {
+        self.conn()?.query_row(
+          "SELECT id,owner_employee_id,department_id,title,objective,status,score,created_at,updated_at FROM workforce_initiatives WHERE id=?1",
+          [id.to_string()],|r|{
+            let id_text:String=r.get(0)?;
+            Ok(Initiative{
+              id:Uuid::parse_str(&id_text).map_err(|e|rusqlite::Error::FromSqlConversionFailure(id_text.len(),rusqlite::types::Type::Text,Box::new(e)))?,
+              owner_employee_id:r.get(1)?,department_id:r.get(2)?,title:r.get(3)?,objective:r.get(4)?,
+              status:r.get(5)?,score:r.get(6)?,created_at:parse_time(r.get(7)?)?,updated_at:parse_time(r.get(8)?)?
+            })
+          }).optional().map_err(WorkforceError::from)
+    }
+
+    pub fn promote_initiative_to_manager_work(
+        &self,
+        org:&Organization,
+        initiative_id:Uuid,
+        now:DateTime<Utc>,
+        policy:&WorkforcePolicy,
+    )->Result<WorkItem> {
+        let initiative=self.get_initiative(initiative_id)?
+          .ok_or(WorkforceError::UnknownWorkItem(initiative_id))?;
+        let department=org.department(&initiative.department_id)
+          .ok_or_else(||WorkforceError::UnknownEmployee(format!("department:{}",initiative.department_id)))?;
+        let manager=org.employee(&department.manager_employee_id)
+          .ok_or_else(||WorkforceError::UnknownEmployee(department.manager_employee_id.clone()))?;
+        if !manager.capabilities.contains("intelligence.reason") {
+            return Err(WorkforceError::Ineligible{employee:manager.id.clone(),capability:"intelligence.reason".into()});
+        }
+        let mut work=WorkItem::new(
+          initiative.department_id.clone(),
+          initiative.owner_employee_id.clone(),
+          format!("Plan department initiative: {}",initiative.title),
+          "intelligence.nexus",
+          "intelligence.reason",
+          serde_json::json!({
+            "prompt":format!(
+              "Act as {} for department {}. Convert this initiative into a bounded execution plan using only department-authorized capabilities. Initiative: {}. Objective: {}",
+              manager.title,initiative.department_id,initiative.title,initiative.objective
+            ),
+            "context":{
+              "initiative_id":initiative.id,
+              "department_id":initiative.department_id,
+              "initiative_score":initiative.score,
+              "mode":"m12-department-initiative-planning"
+            }
+          }),
+          RiskClass::Low
+        );
+        work.assigned_employee_id=Some(manager.id.clone());
+        work.priority=(initiative.score.clamp(0.0,1.0)*1000.0) as i64;
+        work.max_attempts=policy.max_attempts;
+        work.next_escalation_at=Some(now+Duration::seconds(policy.escalation_after_seconds.max(30)));
+        self.enqueue(&work)?;
+        self.conn()?.execute(
+          "UPDATE workforce_initiatives SET status='planning',updated_at=?2 WHERE id=?1",
+          params![initiative.id.to_string(),now.to_rfc3339()])?;
+        Ok(work)
+    }
+
     pub fn add_initiative(&self,value:&Initiative)->Result<()> {
         self.conn()?.execute(r#"INSERT INTO workforce_initiatives(id,owner_employee_id,department_id,title,objective,status,score,created_at,updated_at)
           VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)"#,
