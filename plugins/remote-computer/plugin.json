@@ -13,7 +13,8 @@
       "mapped_core_capabilities": [
         "NetworkAccess",
         "ReadWorkspace"
-      ]
+      ],
+      "parallel_safe": true
     },
     {
       "name": "computer.remote.read_file",
@@ -22,7 +23,8 @@
       "mapped_core_capabilities": [
         "NetworkAccess",
         "ReadWorkspace"
-      ]
+      ],
+      "parallel_safe": true
     },
     {
       "name": "computer.remote.run",
@@ -31,7 +33,8 @@
       "mapped_core_capabilities": [
         "NetworkAccess",
         "ExecuteProcess"
-      ]
+      ],
+      "parallel_safe": false
     }
   ],
   "endpoints": [
