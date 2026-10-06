@@ -957,6 +957,36 @@ mod tests {
     }
 
     #[test]
+    fn default_workforce_config_applies_department_override() {
+        let cfg=config();
+        let sales=cfg.policy_for("sales");
+        assert_eq!(sales.lease_seconds,240);
+        assert_eq!(sales.escalation_after_seconds,600);
+        let product=cfg.policy_for("product");
+        assert_eq!(product.lease_seconds,cfg.defaults.lease_seconds);
+    }
+
+    #[test]
+    fn initiative_promotes_to_department_manager_planning_task() {
+        let store=WorkforceStore::open_in_memory().unwrap();
+        let org=org();
+        store.seed_organization(&org).unwrap();
+        let now=Utc::now();
+        let initiative=Initiative{
+          id:Uuid::new_v4(),owner_employee_id:"sales-copy".into(),department_id:"sales".into(),
+          title:"New outbound segment".into(),objective:"Design a bounded outreach experiment".into(),
+          status:"proposed".into(),score:0.9,created_at:now,updated_at:now
+        };
+        store.add_initiative(&initiative).unwrap();
+        let policy=config().policy_for("sales");
+        let work=store.promote_initiative_to_manager_work(&org,initiative.id,now,&policy).unwrap();
+        assert_eq!(work.assigned_employee_id.as_deref(),Some("sales-director"));
+        assert_eq!(work.plugin_id,"intelligence.nexus");
+        assert_eq!(work.capability,"intelligence.reason");
+        assert_eq!(store.get_initiative(initiative.id).unwrap().unwrap().status,"planning");
+    }
+
+    #[test]
     fn organization_seeds_persistent_employee_runtime() {
         let store=WorkforceStore::open_in_memory().unwrap();
         let org=org();
