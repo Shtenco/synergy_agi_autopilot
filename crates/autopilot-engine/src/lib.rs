@@ -466,6 +466,15 @@ impl ParallelPluginWorkflowEngine {
         }).collect::<std::collections::BTreeMap<_,_>>();
 
         let correlation = CorrelationId::new();
+        let workflow_started = Instant::now();
+        let workflow_route = format!(
+            "workflow:{}",
+            execution_layers.iter().flatten()
+                .filter_map(|id| by_id.get(id))
+                .map(|step| format!("{}/{}@{}", step.plugin_id, step.capability, step.employee_id.as_deref().unwrap_or("unassigned")))
+                .collect::<Vec<_>>()
+                .join("->")
+        );
         let mut context = Vec::<PluginStepContext>::new();
         let mut all_outcomes = Vec::new();
 
@@ -527,6 +536,14 @@ impl ParallelPluginWorkflowEngine {
                         outcome.error.clone().unwrap_or_else(|| "unknown".into()),
                     )).await.map_err(|error| error.to_string())?;
                     all_outcomes.push(outcome);
+                    if let Some(store) = &self.outcomes {
+                        let mut workflow = OutcomeRecord::new(goal_fingerprint, workflow_route.clone());
+                        workflow.success = false;
+                        workflow.verified = false;
+                        workflow.latency_ms = workflow_started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+                        workflow.error_class = Some("workflow_step_failure".into());
+                        store.record(&workflow).map_err(|error| error.to_string())?;
+                    }
                     return Ok(ParallelWorkflowSummary {
                         success: false,
                         layers_executed: layer_index + 1,
@@ -549,6 +566,15 @@ impl ParallelPluginWorkflowEngine {
                 RiskClass::Low,
                 "passed",
             )).await.map_err(|error| error.to_string())?;
+        }
+
+        if let Some(store) = &self.outcomes {
+            let mut workflow = OutcomeRecord::new(goal_fingerprint, workflow_route);
+            workflow.success = true;
+            workflow.verified = true;
+            workflow.latency_ms = workflow_started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+            workflow.quality_score = 1.0;
+            store.record(&workflow).map_err(|error| error.to_string())?;
         }
 
         Ok(ParallelWorkflowSummary {
