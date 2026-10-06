@@ -1,0 +1,17 @@
+[package]
+name = "autopilot-workforce"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+autopilot-domain = { path = "../autopilot-domain" }
+autopilot-org = { path = "../autopilot-org" }
+autopilot-plugin-runtime = { path = "../autopilot-plugin-runtime" }
+chrono.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
