@@ -353,7 +353,8 @@ fn workflow_to_plugin_steps(
                 "from_path":edge.from_path,
                 "to_field":edge.to_field,
                 "compatibility":edge.compatibility,
-                "score":edge.score
+                "score":edge.score,
+                "transform":edge.transform
             }))
             .collect::<Vec<_>>();
         let mut input = serde_json::json!({
