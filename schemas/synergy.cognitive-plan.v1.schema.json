@@ -204,6 +204,36 @@
                           "maxLength": 32
                         }
                       }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "min_length"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "assert_string"
+                        },
+                        "min_length": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        "max_length": {
+                          "oneOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
                     }
                   ]
                 }
