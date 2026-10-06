@@ -390,6 +390,14 @@ impl WorkforceStore {
           .optional().map_err(WorkforceError::from)
     }
 
+    pub fn attach_approval(&self,id:Uuid,approval_id:Uuid)->Result<()> {
+        let changed=self.conn()?.execute(
+          "UPDATE workforce_work_items SET approval_id=?2,updated_at=?3 WHERE id=?1",
+          params![id.to_string(),approval_id.to_string(),Utc::now().to_rfc3339()])?;
+        if changed==0 { return Err(WorkforceError::UnknownWorkItem(id)); }
+        Ok(())
+    }
+
     pub fn list_inbox(&self,employee_id:&str,department_id:&str)->Result<Vec<WorkItem>> {
         let conn=self.conn()?;
         let mut stmt=conn.prepare(r#"SELECT * FROM workforce_work_items
