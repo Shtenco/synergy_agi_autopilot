@@ -8,6 +8,7 @@ license.workspace = true
 autopilot-capability-graph = { path = "../autopilot-capability-graph" }
 autopilot-domain = { path = "../autopilot-domain" }
 autopilot-plugins = { path = "../autopilot-plugins" }
+autopilot-transform = { path = "../autopilot-transform" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
