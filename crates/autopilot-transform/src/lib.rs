@@ -12,6 +12,7 @@ pub enum TransformOp {
     FilterEq { field: String, value: Value },
     ParseJson { output_schema: Value },
     JoinStrings { separator: String },
+    AssertString { min_length: usize, max_length: Option<usize> },
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -144,6 +145,29 @@ fn infer_one(schema: &Value, op: &TransformOp) -> Result<Value, TransformError> 
             }
             Ok(serde_json::json!({"type":"string"}))
         }
+        TransformOp::AssertString { min_length, max_length } => {
+            if schema_type(schema) != Some("string") {
+                return Err(TransformError::ExpectedString);
+            }
+            if let Some(max) = max_length {
+                if *max < *min_length {
+                    return Err(TransformError::OutputContract(
+                        "assert_string max_length is below min_length".into()
+                    ));
+                }
+            }
+            let mut out = schema.clone();
+            let object = out.as_object_mut().ok_or(TransformError::ExpectedString)?;
+            let existing_min = object.get("minLength").and_then(Value::as_u64).unwrap_or(0) as usize;
+            object.insert("minLength".into(), Value::from(existing_min.max(*min_length) as u64));
+            if let Some(max) = max_length {
+                let effective = object.get("maxLength").and_then(Value::as_u64)
+                    .map(|existing| existing.min(*max as u64))
+                    .unwrap_or(*max as u64);
+                object.insert("maxLength".into(), Value::from(effective));
+            }
+            Ok(out)
+        }
     }
 }
 
@@ -190,6 +214,23 @@ fn apply_one(value: Value, op: &TransformOp) -> Result<Value, TransformError> {
                 .collect::<Option<Vec<_>>>()
                 .ok_or(TransformError::ExpectedString)?;
             Ok(Value::String(strings.join(separator)))
+        }
+        TransformOp::AssertString { min_length, max_length } => {
+            let text = value.as_str().ok_or(TransformError::ExpectedString)?;
+            let len = text.chars().count();
+            if len < *min_length {
+                return Err(TransformError::OutputContract(format!(
+                    "string length {len} is below asserted minimum {min_length}"
+                )));
+            }
+            if let Some(max) = max_length {
+                if len > *max {
+                    return Err(TransformError::OutputContract(format!(
+                        "string length {len} exceeds asserted maximum {max}"
+                    )));
+                }
+            }
+            Ok(value)
         }
     }
 }
@@ -315,6 +356,22 @@ mod tests {
             transform.infer_output_schema(&schema),
             Err(TransformError::UnsafeIndex { index:0 })
         ));
+    }
+
+    #[test]
+    fn assert_string_strengthens_contract_and_runtime() {
+        let transform = VerifiedTransform { ops: vec![
+            TransformOp::AssertString { min_length:1, max_length:Some(10) }
+        ]};
+        assert_eq!(
+            transform.infer_output_schema(&serde_json::json!({"type":"string"})).unwrap(),
+            serde_json::json!({"type":"string","minLength":1,"maxLength":10})
+        );
+        assert!(transform.apply(Value::String(String::new())).is_err());
+        assert_eq!(
+            transform.apply(Value::String("hello".into())).unwrap(),
+            Value::String("hello".into())
+        );
     }
 
     #[test]
