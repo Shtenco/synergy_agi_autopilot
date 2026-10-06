@@ -523,6 +523,34 @@ impl WorkforceStore {
         Ok(())
     }
 
+    pub fn list_employee_states(&self)->Result<Vec<EmployeeRuntimeState>> {
+        let conn=self.conn()?;
+        let mut stmt=conn.prepare("SELECT employee_id,department_id,status,current_work_item,node_id,memory_namespace,workspace,model_profile,budget_id,last_heartbeat,updated_at FROM employee_runtime ORDER BY department_id,employee_id")?;
+        let rows=stmt.query_map([],|r|Ok(EmployeeRuntimeState{
+          employee_id:r.get(0)?,department_id:r.get(1)?,status:r.get(2)?,
+          current_work_item:parse_uuid_opt(r.get(3)?)?,node_id:r.get(4)?,
+          memory_namespace:r.get(5)?,workspace:r.get(6)?,model_profile:r.get(7)?,
+          budget_id:r.get(8)?,last_heartbeat:r.get::<_,Option<String>>(9)?.map(parse_time).transpose()?,
+          updated_at:parse_time(r.get(10)?)?
+        }))?;
+        Ok(rows.collect::<std::result::Result<Vec<_>,_>>()?)
+    }
+
+    pub fn list_nodes(&self)->Result<Vec<WorkforceNode>> {
+        let conn=self.conn()?;
+        let mut stmt=conn.prepare("SELECT node_id,kind,endpoint,capabilities_json,cpu_millis,memory_mib,online,last_heartbeat FROM workforce_nodes ORDER BY node_id")?;
+        let rows=stmt.query_map([],|r|{
+          let raw:String=r.get(3)?;
+          Ok(WorkforceNode{
+            node_id:r.get(0)?,kind:r.get(1)?,endpoint:r.get(2)?,
+            capabilities:serde_json::from_str(&raw).map_err(|e|rusqlite::Error::FromSqlConversionFailure(raw.len(),rusqlite::types::Type::Text,Box::new(e)))?,
+            cpu_millis:r.get::<_,i64>(4)? as u64,memory_mib:r.get::<_,i64>(5)? as u64,
+            online:r.get::<_,i64>(6)?!=0,last_heartbeat:parse_time(r.get(7)?)?
+          })
+        })?;
+        Ok(rows.collect::<std::result::Result<Vec<_>,_>>()?)
+    }
+
     pub fn employee_score(&self,employee_id:&str)->Result<f64> {
         let conn=self.conn()?;
         let perf:Option<(f64,f64)>=conn.query_row(
