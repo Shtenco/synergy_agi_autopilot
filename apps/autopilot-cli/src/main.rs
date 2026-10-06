@@ -188,6 +188,12 @@ enum Commands {
         #[arg(long = "skill")] skills: Vec<String>,
         #[arg(long = "tool")] tools: Vec<String>,
     },
+    WorkforceApprovalRequest {
+        #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
+        #[arg(long)] control_db: PathBuf,
+        #[arg(long)] work_item_id: String,
+        #[arg(long)] subject: Option<String>,
+    },
     WorkforceSkillSet {
         #[arg(long, default_value = ".autopilot/workforce.db")] db: PathBuf,
         #[arg(long)] employee: String,
@@ -1704,6 +1710,23 @@ async fn main() -> Result<(), String> {
             item.required_tools=tools.into_iter().collect();
             store.enqueue(&item).map_err(|e|e.to_string())?;
             println!("{}",serde_json::to_string_pretty(&item).map_err(|e|e.to_string())?);
+        },
+        Commands::WorkforceApprovalRequest { db,control_db,work_item_id,subject } => {
+            let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
+            let work_item_id=Uuid::parse_str(&work_item_id).map_err(|e|format!("invalid work item id: {e}"))?;
+            let item=store.get_work_item(work_item_id).map_err(|e|e.to_string())?
+                .ok_or_else(||format!("unknown work item: {work_item_id}"))?;
+            let approvals=ControlPlaneStore::open(&control_db).map_err(|e|e.to_string())?;
+            let request=ApprovalRequest::pending(
+                subject.unwrap_or_else(||format!("M12 workforce: {}",item.goal)),
+                serde_json::json!({
+                    "plugin_id":item.plugin_id,
+                    "capability":item.capability,
+                    "work_item_id":item.id
+                })
+            );
+            approvals.request_approval(&request).map_err(|e|e.to_string())?;
+            println!("{}",serde_json::to_string_pretty(&request).map_err(|e|e.to_string())?);
         },
         Commands::WorkforceSkillSet { db,employee,skill,level,evidence_count } => {
             let store=WorkforceStore::open(&db).map_err(|e|e.to_string())?;
