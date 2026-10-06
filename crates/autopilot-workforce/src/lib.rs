@@ -695,6 +695,24 @@ impl WorkforceExecutor {
             return Ok(None);
         };
 
+        let capability=self.plugins.registry().get(&item.plugin_id)
+          .and_then(|manifest|manifest.capability(&item.capability))
+          .ok_or_else(||WorkforceError::Execution(format!("unknown workforce capability {}/{}",item.plugin_id,item.capability)))?;
+        if capability.requires_approval {
+            if item.approval_id.is_none() {
+                self.store.fail_or_retry(&item,employee_id,"persistent approval is required",Utc::now(),&policy)?;
+                return Err(WorkforceError::Execution("persistent approval is required".into()));
+            }
+            if !self.plugins.persistent_control_plane_enabled() {
+                self.store.fail_or_retry(&item,employee_id,"M12 approval requires control_plane_db",Utc::now(),&policy)?;
+                return Err(WorkforceError::Execution("M12 approval requires persistent control_plane_db".into()));
+            }
+        }
+        if item.budget_microusd>0 && !self.plugins.persistent_control_plane_enabled() {
+            self.store.fail_or_retry(&item,employee_id,"M12 budget reservation requires control_plane_db",Utc::now(),&policy)?;
+            return Err(WorkforceError::Execution("M12 budget reservation requires persistent control_plane_db".into()));
+        }
+
         let memory = self.plugins.execute(PluginCall{
           plugin_id:"intelligence.nexus".into(),
           capability:"memory.search".into(),
