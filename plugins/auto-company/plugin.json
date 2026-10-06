@@ -10,7 +10,8 @@
       "name": "company.status",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "company.opportunity.ingest",
@@ -18,13 +19,15 @@
       "requires_approval": false,
       "mapped_core_capabilities": [
         "NetworkAccess"
-      ]
+      ],
+      "parallel_safe": false
     },
     {
       "name": "company.action.approve",
       "risk": "High",
       "requires_approval": true,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": false
     },
     {
       "name": "company.action.dispatch",
@@ -32,13 +35,15 @@
       "requires_approval": true,
       "mapped_core_capabilities": [
         "NetworkAccess"
-      ]
+      ],
+      "parallel_safe": false
     },
     {
       "name": "company.pause",
       "risk": "High",
       "requires_approval": true,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": false
     }
   ],
   "endpoints": [
