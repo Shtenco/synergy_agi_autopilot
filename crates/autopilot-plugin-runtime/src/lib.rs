@@ -138,6 +138,21 @@ impl PluginExecutor {
                         )
                     ));
                 }
+                if let Some(workforce) = call.input.get("_workforce").and_then(Value::as_object) {
+                    let work_item_id = workforce.get("work_item_id").and_then(Value::as_str)
+                        .ok_or_else(|| PluginRuntimeError::PersistentApproval(
+                            "workforce approval requires _workforce.work_item_id".into()
+                        ))?;
+                    let approved_work_item = request.action.get("work_item_id").and_then(Value::as_str);
+                    if approved_work_item != Some(work_item_id) {
+                        return Err(PluginRuntimeError::PersistentApproval(
+                            format!(
+                                "approval {} is bound to work item {:?}, not {}",
+                                approval_id, approved_work_item, work_item_id
+                            )
+                        ));
+                    }
+                }
             }
         }
         for mapped in &capability.mapped_core_capabilities {
@@ -882,6 +897,7 @@ fn loopback_http_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use autopilot_control_plane::ApprovalRequest;
     use autopilot_plugins::parse_manifest_json;
     use autopilot_runtime::{CommandResult, FakeRuntime};
 
@@ -1003,6 +1019,82 @@ mod tests {
             approved:false,
         }).await.unwrap();
         assert_eq!(result.output["ok"],true);
+    }
+
+    #[test]
+    fn persistent_workforce_approval_is_scoped_to_exact_work_item() {
+        let db = std::env::temp_dir().join(format!("synergy-m12-approval-{}.db", Uuid::new_v4()));
+        let work_item_id = Uuid::new_v4();
+        let other_work_item_id = Uuid::new_v4();
+        let store = ControlPlaneStore::open(&db).unwrap();
+        let request = ApprovalRequest::pending(
+            "M12 workforce command",
+            json!({
+                "plugin_id":"computer.local.commander",
+                "capability":"computer.run_command",
+                "work_item_id":other_work_item_id
+            }),
+        );
+        store.request_approval(&request).unwrap();
+        store.decide_approval(request.id, true, "human", Some("approved")).unwrap();
+
+        let runtime = Arc::new(FakeRuntime::new(CommandResult {
+            exit_code: 0, stdout: String::new(), stderr: String::new(), duration_ms: 0,
+        }));
+        let mut config = PluginRuntimeConfig::default();
+        config.control_plane_db = Some(db);
+        let executor = PluginExecutor::new(registry(), PolicyEngine::default(), runtime, config);
+        let call = PluginCall {
+            plugin_id: "computer.local.commander".into(),
+            capability: "computer.run_command".into(),
+            input: json!({
+                "program":"cargo",
+                "args":["test"],
+                "_approval_id":request.id.to_string(),
+                "_workforce":{"work_item_id":work_item_id.to_string()}
+            }),
+            approved: true,
+        };
+        let manifest = executor.registry().get(&call.plugin_id).unwrap();
+        let error = executor.authorize(manifest, &call).unwrap_err();
+        assert!(matches!(error, PluginRuntimeError::PersistentApproval(_)));
+    }
+
+    #[test]
+    fn persistent_workforce_approval_accepts_exact_work_item_scope() {
+        let db = std::env::temp_dir().join(format!("synergy-m12-approval-{}.db", Uuid::new_v4()));
+        let work_item_id = Uuid::new_v4();
+        let store = ControlPlaneStore::open(&db).unwrap();
+        let request = ApprovalRequest::pending(
+            "M12 workforce command",
+            json!({
+                "plugin_id":"computer.local.commander",
+                "capability":"computer.run_command",
+                "work_item_id":work_item_id
+            }),
+        );
+        store.request_approval(&request).unwrap();
+        store.decide_approval(request.id, true, "human", Some("approved")).unwrap();
+
+        let runtime = Arc::new(FakeRuntime::new(CommandResult {
+            exit_code: 0, stdout: String::new(), stderr: String::new(), duration_ms: 0,
+        }));
+        let mut config = PluginRuntimeConfig::default();
+        config.control_plane_db = Some(db);
+        let executor = PluginExecutor::new(registry(), PolicyEngine::default(), runtime, config);
+        let call = PluginCall {
+            plugin_id: "computer.local.commander".into(),
+            capability: "computer.run_command".into(),
+            input: json!({
+                "program":"cargo",
+                "args":["test"],
+                "_approval_id":request.id.to_string(),
+                "_workforce":{"work_item_id":work_item_id.to_string()}
+            }),
+            approved: true,
+        };
+        let manifest = executor.registry().get(&call.plugin_id).unwrap();
+        executor.authorize(manifest, &call).unwrap();
     }
 
     #[tokio::test]
