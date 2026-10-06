@@ -10,37 +10,43 @@
       "name": "business.ceo.plan",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "business.cfo.analyze",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "business.smm.plan",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "business.sales.plan",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "business.sales.compose_offer",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "business.verify.evidence",
       "risk": "Low",
       "requires_approval": false,
-      "mapped_core_capabilities": []
+      "mapped_core_capabilities": [],
+      "parallel_safe": true
     },
     {
       "name": "business.external.publish",
@@ -48,7 +54,8 @@
       "requires_approval": true,
       "mapped_core_capabilities": [
         "NetworkAccess"
-      ]
+      ],
+      "parallel_safe": false
     }
   ],
   "endpoints": [
