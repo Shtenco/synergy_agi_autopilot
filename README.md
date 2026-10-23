@@ -1,13 +1,13 @@
-# 🤖 SYNERGY AGI Autopilot
+#  SYNERGY AGI Autopilot
 
 > **Домен:** Intelligence / Agents  
 > **Роль:** Агентный автопилот для планирования задач, построения DAG и ограниченного автономного исполнения через проверяемые контракты.  
-> **Статус:** 🧱 STUB / architecture node — полноценный автономный runtime на текущем main не подтверждён.  
+> **Статус:**  STUB / architecture node — полноценный автономный runtime на текущем main не подтверждён.  
 > **Архитектурный родитель:** [`synergy_agi_nexus`](https://github.com/Shtenco/synergy_agi_nexus)
 
 ---
 
-## 🎯 Задача репозитория
+##  Задача репозитория
 
 Агентный автопилот для планирования задач, построения DAG и ограниченного автономного исполнения через проверяемые контракты.
 
@@ -15,21 +15,21 @@
 
 ---
 
-## 🧠 Место в системе
+##  Место в системе
 
 ```mermaid
 flowchart LR
-    SYS[🧭 synergy_system] --> P[synergy_agi_nexus]
-    P --> THIS[🤖 synergy_agi_autopilot]
-    THIS --> E[📦 Evidence / artifacts]
-    THIS --> I[🔗 Integrations]
+    SYS[ synergy_system] --> P[synergy_agi_nexus]
+    P --> THIS[ synergy_agi_autopilot]
+    THIS --> E[ Evidence / artifacts]
+    THIS --> I[ Integrations]
 ```
 
 Архитектурная стрелка означает принадлежность к системному домену. Она **не доказывает** наличие runtime dependency, импорта или готовой интеграции.
 
 ---
 
-## 🏗️ Архитектурный контракт
+##  Архитектурный контракт
 
 Для перехода из концепта/R&D в подтверждённый компонент репозиторий должен явно описать:
 
@@ -45,7 +45,7 @@ flowchart LR
 
 ---
 
-## 🛡️ Authority boundaries
+##  Authority boundaries
 
 В федерации SYNERGY действуют жёсткие разграничения:
 
@@ -63,24 +63,24 @@ repository name         != proof of implementation
 
 ---
 
-## 🔬 Статус доказанности
+##  Статус доказанности
 
-🧱 STUB / architecture node — полноценный автономный runtime на текущем main не подтверждён.
+ STUB / architecture node — полноценный автономный runtime на текущем main не подтверждён.
 
 Применяемая шкала:
 
 | Метка | Значение |
 |---|---|
-| ✅ GREEN | воспроизводимо подтверждено тестами/артефактами |
-| 🟡 CANDIDATE | реализация есть, но доказательство неполное |
-| 🔬 R&D | экспериментальная линия |
-| 🧱 STUB | архитектурный узел без достаточной реализации |
-| 🕰️ LEGACY | историческая ветка / provenance |
-| ❌ RED | тезис не прошёл проверку |
+|  GREEN | воспроизводимо подтверждено тестами/артефактами |
+|  CANDIDATE | реализация есть, но доказательство неполное |
+|  R&D | экспериментальная линия |
+|  STUB | архитектурный узел без достаточной реализации |
+|  LEGACY | историческая ветка / provenance |
+|  RED | тезис не прошёл проверку |
 
 ---
 
-## 🔗 Связанные репозитории
+##  Связанные репозитории
 
 - [`synergy_agentic_ai_economy`](https://github.com/Shtenco/synergy_agentic_ai_economy)
 - [`synergy_ai_coder`](https://github.com/Shtenco/synergy_ai_coder)
@@ -88,13 +88,13 @@ repository name         != proof of implementation
 - [`synergy_system`](https://github.com/Shtenco/synergy_system)
 
 Главная карта:
-- [🧭 SYNERGY SYSTEM](https://github.com/Shtenco/synergy_system)
-- [📚 Атлас всех 75 репозиториев](https://github.com/Shtenco/synergy_system/blob/main/docs/SYNERGY_REPOSITORY_ATLAS.md)
-- [🧾 Машиночитаемый registry](https://github.com/Shtenco/synergy_system/blob/main/registry/SYNERGY_REPOSITORIES.json)
+- [ SYNERGY SYSTEM](https://github.com/Shtenco/synergy_system)
+- [ Атлас всех 75 репозиториев](https://github.com/Shtenco/synergy_system/blob/main/docs/SYNERGY_REPOSITORY_ATLAS.md)
+- [ Машиночитаемый registry](https://github.com/Shtenco/synergy_system/blob/main/registry/SYNERGY_REPOSITORIES.json)
 
 ---
 
-## 🧪 Критерий перехода в GREEN
+##  Критерий перехода в GREEN
 
 Репозиторий нельзя считать зрелым только потому, что появился код. Для GREEN нужны как минимум:
 
@@ -109,7 +109,7 @@ repository name         != proof of implementation
 
 ---
 
-## 🗺️ Документационный стандарт
+##  Документационный стандарт
 
 По мере развития README должен расширяться предметными разделами, а не общими лозунгами:
 
@@ -135,7 +135,7 @@ repository name         != proof of implementation
 
 ---
 
-## 🚀 Roadmap документации и реализации
+##  Roadmap документации и реализации
 
 - [ ] описать реальный file tree после появления/ревизии исходников;
 - [ ] добавить Mermaid-диаграмму уже фактических модулей;
@@ -148,7 +148,7 @@ repository name         != proof of implementation
 
 ---
 
-## 🛑 Что этот репозиторий пока НЕ утверждает
+##  Что этот репозиторий пока НЕ утверждает
 
 - что концептуальная архитектура уже является production-системой;
 - что наличие README доказывает работоспособность;
