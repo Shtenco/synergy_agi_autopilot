@@ -1,3 +1,9 @@
+<!-- RESEARCH-V2-2026:START -->
+<img src="assets/readme/scientific-process-v2.svg" width="100%" alt="AUTOPILOT / DAG AUTHORIZATION SCIENCE"/>
+
+[Научно-техническое досье V2](docs/SCIENTIFIC_DOSSIER_V2_2026.md) — алгоритмы, формализация, исследования и перспективы. Предыдущий README сохранён полностью.
+<!-- RESEARCH-V2-2026:END -->
+
 #  SYNERGY AGI Autopilot
 
 > **Домен:** Intelligence / Agents  
